@@ -141,8 +141,47 @@ void print_usage (const options_t options) {
     fprintf(stderr, "Options:\n");
     for (int i=0; i<options.len; i++) {
         const option_t curr_option = options.options[i];
-        fprintf(stderr, "\t-%c, --%-30s%s: %s\n",
-                curr_option.short_arg, curr_option.long_arg,
-                curr_option.name, curr_option.description);
+
+        char* type_str;
+        switch (curr_option.type) {
+            case ARG_INT:
+                type_str = "int";
+                break;
+            case ARG_STR:
+                type_str = "string";
+                break;
+            case ARG_CHAR:
+                type_str = "char";
+                break;
+            case ARG_FLOAT:
+                type_str = "float";
+                break;
+            case ARG_BOOL:
+                type_str = "bool";
+                break;
+        }
+
+        if (curr_option.type == ARG_NO_VALUE) {
+            if (curr_option.required) {
+                fprintf(stderr, "\t-%c, --%-30s(required) %s: %s\n",
+                        curr_option.short_arg, curr_option.long_arg,
+                        curr_option.name, curr_option.description);
+            } else {
+                fprintf(stderr, "\t-%c, --%-30s%s: %s\n",
+                        curr_option.short_arg, curr_option.long_arg,
+                        curr_option.name, curr_option.description);
+            }
+        } else {
+            if (curr_option.required) {
+                fprintf(stderr, "\t-%c, --%-30s(%s, required) %s: %s\n",
+                        curr_option.short_arg, curr_option.long_arg,
+                        type_str, curr_option.name, curr_option.description);
+            } else {
+                fprintf(stderr, "\t-%c, --%-30s(%s) %s: %s\n",
+                        curr_option.short_arg, curr_option.long_arg,
+                        type_str, curr_option.name, curr_option.description);
+            }
+        }
+
     }
 }
