@@ -19,23 +19,33 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef LOGGER_H
-#define LOGGER_H
 
-#ifdef DEBUG
+#ifndef SEQUENCE_READER_H
+#define SEQUENCE_READER_H
 
-#define LOG_DEBUG(...) {\
-    char tmp[1024];\
-    snprintf(tmp, 1024, __VA_ARGS__); \
-    fprintf(stderr, "DEBUG: %s (%s:%d)\n", tmp, __FILE__, __LINE__); \
-    }
+#include <stdbool.h>
 
-#else // DEBUG
+typedef struct {
+    size_t text_offset;
+    size_t pattern_offset;
+    unsigned int text_len;
+    unsigned int pattern_len;
+} sequence_pair_t;
 
-#define LOG_DEBUG(fmt, ...)
+typedef struct {
+    FILE* fp;
+    char* sequences_buffer;
+    size_t sequences_buffer_size;
+    sequence_pair_t* sequences_metadata;
+    size_t sequences_metadata_size;
+    size_t num_sequences_read;
+} sequence_reader_t;
 
-#endif // DEBUG
+bool grow_sequence_buffer (sequence_reader_t* reader);
+bool grow_metadata_array (sequence_reader_t* reader);
+bool init_sequence_reader (sequence_reader_t* reader, char* seq_file);
+bool read_n_sequences (sequence_reader_t* reader, size_t n);
 
-#define LOG_ERROR(...) fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n");
+// TODO: Destroy reader
 
 #endif
