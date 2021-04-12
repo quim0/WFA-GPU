@@ -45,7 +45,6 @@ bool grow_sequence_buffer (sequence_reader_t* reader);
 bool grow_metadata_array (sequence_reader_t* reader);
 bool init_sequence_reader (sequence_reader_t* reader, char* seq_file);
 bool read_n_sequences (sequence_reader_t* reader, size_t n);
-
-// TODO: Destroy reader
+void destroy_reader (sequence_reader_t* reader);
 
 #endif

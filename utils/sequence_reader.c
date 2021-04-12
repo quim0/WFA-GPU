@@ -190,3 +190,8 @@ bool read_n_sequences (sequence_reader_t* reader, size_t n) {
     LOG_DEBUG("Read %zu sequences.", curr_sequence_idx+1);
     return true;
 }
+
+void destroy_reader (sequence_reader_t* reader) {
+    if (reader->sequences_buffer) free(reader->sequences_buffer);
+    if (reader->sequences_metadata) free(reader->sequences_metadata);
+}
