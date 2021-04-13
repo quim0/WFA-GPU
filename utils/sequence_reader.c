@@ -33,6 +33,7 @@ bool grow_sequence_buffer (sequence_reader_t* reader) {
         return false;
     }
 
+    reader->sequences_buffer = new_mem_chunk;
     memset(reader->sequences_buffer + reader->sequences_buffer_size,
            0,
            grow_size);
@@ -43,14 +44,15 @@ bool grow_sequence_buffer (sequence_reader_t* reader) {
 
 bool grow_metadata_array (sequence_reader_t* reader) {
     const size_t alignments_to_grow = 50000;
-    char* new_mem_chunk = realloc(reader->sequences_metadata,
-                          reader->sequences_metadata_size + alignments_to_grow);
+    sequence_pair_t* new_mem_chunk = realloc(reader->sequences_metadata,
+              (reader->sequences_metadata_size + alignments_to_grow) * sizeof(sequence_pair_t));
 
     if (new_mem_chunk == NULL) {
         LOG_ERROR("Could not allocate memory.");
         return false;
     }
 
+    reader->sequences_metadata = new_mem_chunk;
     memset(reader->sequences_metadata + reader->sequences_metadata_size,
            0,
            alignments_to_grow * sizeof(sequence_pair_t));
