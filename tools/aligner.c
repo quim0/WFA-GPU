@@ -20,10 +20,15 @@
  */
 
 #include "utils/logger.h"
+#include "utils/wf_clock.h"
 #include "utils/arg_handler.h"
+#include "utils/sequence_reader.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <errno.h>
+#include <string.h>
 
 #define NUM_ARGUMENTS 1
 
@@ -36,7 +41,7 @@ int main(int argc, char** argv) {
          .long_arg = "file",
          .required = true,
          .type = ARG_STR
-         }
+         },
     };
 
     options_t options = {options_arr, NUM_ARGUMENTS};
@@ -46,4 +51,20 @@ int main(int argc, char** argv) {
         print_usage(options);
         exit(1);
     }
+
+    sequence_reader_t sequence_reader = {0};
+    char* sequences_file = options.options[0].value.str_val;
+    init_sequence_reader(&sequence_reader, sequences_file);
+    size_t sequences_read = 0;
+
+    DEBUG_CLOCK_INIT()
+    DEBUG_CLOCK_START()
+
+    if (!read_n_sequences(&sequence_reader, &sequences_read)) {
+        LOG_ERROR("Error reading file: %s (%s).", sequences_file, strerror(errno));
+        exit(1);
+    }
+
+    DEBUG_CLOCK_STOP("File read.")
+
 }
