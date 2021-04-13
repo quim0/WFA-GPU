@@ -30,7 +30,7 @@
 #include <errno.h>
 #include <string.h>
 
-#define NUM_ARGUMENTS 1
+#define NUM_ARGUMENTS 2
 
 int main(int argc, char** argv) {
 
@@ -41,6 +41,14 @@ int main(int argc, char** argv) {
          .long_arg = "file",
          .required = true,
          .type = ARG_STR
+         },
+        {.name = "Number of alignments",
+         .description = "Number of alignments to read from the file (default=all"
+                        " alignments)",
+         .short_arg = 'n',
+         .long_arg = "num-alignments",
+         .required = false,
+         .type = ARG_INT
          },
     };
 
@@ -55,7 +63,11 @@ int main(int argc, char** argv) {
     sequence_reader_t sequence_reader = {0};
     char* sequences_file = options.options[0].value.str_val;
     init_sequence_reader(&sequence_reader, sequences_file);
+
     size_t sequences_read = 0;
+    if (options.options[1].parsed) {
+        sequences_read = options.options[1].value.int_val * 2;
+    }
 
     DEBUG_CLOCK_INIT()
     DEBUG_CLOCK_START()
