@@ -19,8 +19,6 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include "sequence_reader.h"
 #include "logger.h"
@@ -93,7 +91,8 @@ bool init_sequence_reader (sequence_reader_t* reader, char* seq_file) {
     return true;
 }
 
-bool read_n_sequences (sequence_reader_t* reader, size_t n) {
+// Reads at most n sequences, if n=0, read all file
+bool read_n_sequences (sequence_reader_t* reader, size_t* n) {
     if (!reader->fp || !reader->sequences_buffer || !reader->sequences_metadata) {
         LOG_ERROR("Sequence reader not initialized.");
         return false;
@@ -103,7 +102,7 @@ bool read_n_sequences (sequence_reader_t* reader, size_t n) {
     size_t line_size = 0;
     size_t read_bytes = 0;
     size_t curr_sequence_idx = 0;
-    while (curr_sequence_idx < n) {
+    while ((*n == 0) || (curr_sequence_idx < *n)) {
         ssize_t curr_read_size = getline(&lineptr, &line_size, reader->fp);
         if (curr_read_size == -1) {
             break;
@@ -113,6 +112,9 @@ bool read_n_sequences (sequence_reader_t* reader, size_t n) {
             LOG_ERROR("getline could not allocate memory.");
             return false;
         }
+
+        // Only the delimiter character has been read (empty line)
+        if (curr_read_size == 1) continue;
 
         // Add padding so that sequences are 32 bits aligned
         // curr_read_size - 1 to remove the initial '>' or '<', the newline is
@@ -186,8 +188,9 @@ bool read_n_sequences (sequence_reader_t* reader, size_t n) {
     }
 
     free(lineptr);
+    *n = curr_sequence_idx;
 
-    LOG_DEBUG("Read %zu sequences.", curr_sequence_idx+1);
+    LOG_DEBUG("Read %zu sequences.", *n);
     return true;
 }
 

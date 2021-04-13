@@ -24,6 +24,8 @@
 #define SEQUENCE_READER_H
 
 #include <stdbool.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 typedef struct {
     size_t text_offset;
@@ -44,7 +46,9 @@ typedef struct {
 bool grow_sequence_buffer (sequence_reader_t* reader);
 bool grow_metadata_array (sequence_reader_t* reader);
 bool init_sequence_reader (sequence_reader_t* reader, char* seq_file);
-bool read_n_sequences (sequence_reader_t* reader, size_t n);
+// Reads at most n sequences, if n=0, read all file. N will be updated with the
+// real number of sequences read.
+bool read_n_sequences (sequence_reader_t* reader, size_t* n);
 void destroy_reader (sequence_reader_t* reader);
 
 #endif
