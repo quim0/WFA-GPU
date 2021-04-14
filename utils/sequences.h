@@ -19,31 +19,14 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-
-#ifndef SEQUENCE_READER_H
-#define SEQUENCE_READER_H
-
-#include <stdbool.h>
-#include <stdlib.h>
-#include <stdio.h>
-
-#include "sequences.h"
+#ifndef SEQUENCES_H
+#define SEQUENCES_H
 
 typedef struct {
-    FILE* fp;
-    char* sequences_buffer;
-    size_t sequences_buffer_size;
-    sequence_pair_t* sequences_metadata;
-    size_t sequences_metadata_size;
-    size_t num_sequences_read;
-} sequence_reader_t;
-
-bool grow_sequence_buffer (sequence_reader_t* reader);
-bool grow_metadata_array (sequence_reader_t* reader);
-bool init_sequence_reader (sequence_reader_t* reader, char* seq_file);
-// Reads at most n sequences, if n=0, read all file. N will be updated with the
-// real number of sequences read.
-bool read_n_sequences (sequence_reader_t* reader, size_t* n);
-void destroy_reader (sequence_reader_t* reader);
+    size_t text_offset;
+    size_t pattern_offset;
+    unsigned int text_len;
+    unsigned int pattern_len;
+} sequence_pair_t;
 
 #endif
