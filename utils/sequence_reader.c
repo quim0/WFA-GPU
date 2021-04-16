@@ -185,12 +185,12 @@ bool read_n_sequences (sequence_reader_t* reader, size_t* n) {
             read_bytes += curr_seq_size_padded;
         }
 
-        reader->num_sequences_read++;
         curr_sequence_idx++;
     }
 
     free(lineptr);
     *n = curr_sequence_idx;
+    reader->num_sequences_read = curr_sequence_idx;
 
     LOG_DEBUG("Read %zu sequences.", *n);
     return true;

@@ -25,6 +25,8 @@
 typedef struct {
     size_t text_offset;
     size_t pattern_offset;
+    size_t text_offset_packed;
+    size_t pattern_offset_packed;
     unsigned int text_len;
     unsigned int pattern_len;
 } sequence_pair_t;
