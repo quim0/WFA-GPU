@@ -23,6 +23,7 @@
 #include "utils/wf_clock.h"
 #include "utils/arg_handler.h"
 #include "utils/sequence_reader.h"
+#include "batch_async.cuh"
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -79,4 +80,10 @@ int main(int argc, char** argv) {
 
     DEBUG_CLOCK_STOP("File read.")
 
+    launch_batch_async(
+        sequence_reader.sequences_buffer,
+        sequence_reader.sequences_buffer_size,
+        sequence_reader.sequences_metadata,
+        sequence_reader.num_sequences_read / 2
+    );
 }
