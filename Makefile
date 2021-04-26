@@ -4,8 +4,9 @@ SRC_PATH=lib
 BUILD_PATH=build
 SRC_ALIGNER=tools/aligner.c utils/arg_handler.c utils/sequence_reader.c
 SRC_LIB=$(wildcard $(SRC_PATH)/kernels/*cu) lib/sequence_packing.cu lib/batch_async.cu
+SRC_TEST=$(wildcard tests/test_*.cu)
 ARGS=-I . -Ilib/
-ARGS_ALIGNER=-Lbuild/ -L/usr/local/cuda/lib64 -I . -Ilib/
+ARGS_ALIGNER=-Lbuild/ -L/usr/local/cuda/lib64 $(ARGS)
 NVCC_OPTIONS=#-gencode arch=compute_70,code=sm_70
 
 aligner: wfa-gpu-so $(SRC_ALIGNER)
@@ -17,6 +18,9 @@ aligner: wfa-gpu-so $(SRC_ALIGNER)
 aligner-debug: wfa-gpu-debug-so $(SRC_ALIGNER)
 	mkdir -p bin
 	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -ggdb -DDEBUG -o bin/wfa.affine.gpu -lwfagpu
+
+tests: $(SRC_TEST) wfa-gpu-so
+	$(NVCC) $(NVCC_OPTIONS) -g $(ARGS_ALIGNER) $(SRC_TEST) -lwfagpu
 
 wfa-gpu-so: $(SRC_LIB)
 	mkdir -p build
