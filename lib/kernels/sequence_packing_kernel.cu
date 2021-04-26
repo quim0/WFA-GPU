@@ -20,6 +20,7 @@
  */
 
 #include <stdint.h>
+#include <stdio.h>
 #include "kernels/sequence_packing_kernel.cuh"
 
 // Encode one sequence from 8 to 2 bits
@@ -48,11 +49,13 @@ __global__ void compact_sequences (const char* const sequences_in,
     extern __shared__ char sequence_sh[];
 
     size_t read_bytes = 0;
-    while ((read_bytes+shared_memory_size) < sequence_unpacked_length) {
+    do {
         // Load cache
-        for (int i=threadIdx.x*4; i<(shared_memory_size/4); i += blockDim.x*4) {
+        for (int i=threadIdx.x*4; (i<(shared_memory_size/4)) && (i < sequence_unpacked_length); i += blockDim.x*4) {
             *(uint32_t*)(&sequence_sh[i]) = *(uint32_t*)(&sequence_unpacked[read_bytes + i]);
         }
+
+        __syncthreads();
 
         // Each thread packs 4 bytes into 1 byte.
         for (int i=threadIdx.x; i<(sequence_unpacked_length/4); i += blockDim.x) {
@@ -99,5 +102,5 @@ __global__ void compact_sequences (const char* const sequences_in,
         }
 
         read_bytes += shared_memory_size;
-    }
+    } while ((read_bytes+shared_memory_size) < sequence_unpacked_length);
 }

@@ -33,9 +33,15 @@ void prepare_pack_sequences_gpu_async (const char* sequences_buffer,
                          size_t* device_sequences_buffer_packed_size,
                          sequence_pair_t** device_sequences_metadata,
                          cudaStream_t memcpy_stream) {
+    // +1 for the final nullbyte
     size_t mem_needed_unpacked =
                             sequences_metadata[num_alignments-1].text_offset
-                            + sequences_metadata[num_alignments-1].text_len;
+                            + sequences_metadata[num_alignments-1].text_len + 1;
+
+    if (mem_needed_unpacked == 0) {
+        LOG_ERROR("No alignments to do or invalid sequence metadata.")
+    }
+
     LOG_DEBUG("Allocating %.2f MiB to store the unpacked sequences on the device.",
               float(mem_needed_unpacked) / (1<<20));
 
