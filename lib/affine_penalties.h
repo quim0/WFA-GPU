@@ -23,10 +23,10 @@
 #define AFFINE_PENALTIES_H
 
 typedef struct {
-    int m; // match
+    // Match is always 0 for WFA to work
     int x; // mismatch
     int o; // gap-open
     int e; // gap-extend
-} affine_penalties_h;
+} affine_penalties_t;
 
 #endif
