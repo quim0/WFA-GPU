@@ -3,7 +3,7 @@ NVCC=nvcc
 SRC_PATH=lib
 BUILD_PATH=build
 SRC_ALIGNER=tools/aligner.c utils/arg_handler.c utils/sequence_reader.c
-SRC_LIB=$(wildcard $(SRC_PATH)/kernels/*cu) lib/sequence_packing.cu lib/batch_async.cu
+SRC_LIB=$(wildcard $(SRC_PATH)/kernels/*cu) $(wildcard $(SRC_PATH)/*.cu)
 SRC_TEST=$(wildcard tests/test_*.cu)
 ARGS=-I . -Ilib/
 ARGS_ALIGNER=-Lbuild/ -L/usr/local/cuda/lib64 $(ARGS)
@@ -19,8 +19,14 @@ aligner-debug: wfa-gpu-debug-so $(SRC_ALIGNER)
 	mkdir -p bin
 	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -ggdb -DDEBUG -o bin/wfa.affine.gpu -lwfagpu
 
-tests: $(SRC_TEST) wfa-gpu-so
-	$(NVCC) $(NVCC_OPTIONS) -g $(ARGS_ALIGNER) $(SRC_TEST) -lwfagpu
+tests: test-packing test-alignment
+	mv $^ $(BUILD_PATH)/
+
+test-packing: tests/test_packing_kernel.cu wfa-gpu-debug-so
+	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS_ALIGNER) $< -lwfagpu -o $@
+
+test-alignment: tests/test_alignment_kernel.cu wfa-gpu-debug-so
+	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS_ALIGNER) $< -lwfagpu -o $@
 
 wfa-gpu-so: $(SRC_LIB)
 	mkdir -p build
@@ -30,7 +36,7 @@ wfa-gpu-so: $(SRC_LIB)
 
 wfa-gpu-debug-so: $(SRC_LIB)
 	mkdir -p build
-	$(NVCC) $(NVCC_OPTIONS) -g -DDEBUG $(ARGS) -Xcompiler -fPIC -dc $^
+	$(NVCC) $(NVCC_OPTIONS) -g -G -DDEBUG $(ARGS) -Xcompiler -fPIC -dc $^
 	mv *.o build/
 	$(NVCC) -shared -o build/libwfagpu.so build/*.o -lcudart
 
