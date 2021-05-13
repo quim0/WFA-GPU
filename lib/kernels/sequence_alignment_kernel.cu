@@ -312,6 +312,59 @@ __device__ void next_MDI (wfa_wavefront_t** M_wavefronts,
     }
 }
 
+__device__ void update_wf_ptr_array (wfa_wavefront_t** M_wavefronts,
+                                     wfa_wavefront_t** I_wavefronts,
+                                     wfa_wavefront_t** D_wavefronts,
+                                     const int active_working_set_size,
+                                     const int max_wf_size,
+                                     const int curr_wf) {
+    const int tid = threadIdx.x;
+
+    // TODO: Assumes blockDim.x > active_working_set_size, maybe double
+    // check before launching kernel?
+    // TODO: Do this with warp shuffle primitives
+    wfa_wavefront_t* m_ptr;
+    wfa_wavefront_t* i_ptr;
+    wfa_wavefront_t* d_ptr;
+    if (tid < active_working_set_size) {
+        m_ptr = M_wavefronts[tid];
+        i_ptr = I_wavefronts[tid];
+        d_ptr = D_wavefronts[tid];
+    }
+
+    // Make sure all values are read before writing
+    __syncthreads();
+
+    if (tid == 0) {
+        M_wavefronts[active_working_set_size - 1] = m_ptr;
+        I_wavefronts[active_working_set_size - 1] = i_ptr;
+        D_wavefronts[active_working_set_size - 1] = d_ptr;
+
+        m_ptr->exist = false;
+        i_ptr->exist = false;
+        d_ptr->exist = false;
+
+    }
+    else if (tid < active_working_set_size) {
+        // From 1 to active_working_set_size - 1
+        M_wavefronts[tid - 1] = m_ptr;
+        I_wavefronts[tid - 1] = i_ptr;
+        D_wavefronts[tid - 1] = d_ptr;
+    }
+
+    // Make sure values are written before reseting the "new" wavefront
+    __syncthreads();
+
+    // Set new wf to NULL, as new wavefront may be smaller than the
+    // previous one
+    wfa_offset_t* to_clean = M_wavefronts[curr_wf]->offsets - (max_wf_size/2);
+
+    for (int i=tid; i<max_wf_size; i+=blockDim.x) {
+        to_clean[i] = -1;
+    }
+
+}
+
 __global__ void alignment_kernel (
                             const char* packed_sequences_buffer,
                             const sequence_pair_t* sequences_metadata,
@@ -418,51 +471,14 @@ __global__ void alignment_kernel (
         M_wavefronts[curr_wf]->exist = true;
     }
 
-    // --------------------------------------------------------------
-    // Moves wavefronts
-    // TODO: Move this to a function as is also used in the main loop
-    wfa_wavefront_t* m_ptr;
-    wfa_wavefront_t* i_ptr;
-    wfa_wavefront_t* d_ptr;
-    if (tid < active_working_set_size) {
-        m_ptr = M_wavefronts[tid];
-        i_ptr = I_wavefronts[tid];
-        d_ptr = D_wavefronts[tid];
-    }
 
-    // Make sure all values are read before writing
-    __syncthreads();
-
-    if (tid == 0) {
-        M_wavefronts[active_working_set_size - 1] = m_ptr;
-        I_wavefronts[active_working_set_size - 1] = i_ptr;
-        D_wavefronts[active_working_set_size - 1] = d_ptr;
-
-        m_ptr->exist = false;
-        i_ptr->exist = false;
-        d_ptr->exist = false;
-
-    }
-    else if (tid < active_working_set_size) {
-        // From 1 to active_working_set_size - 1
-        M_wavefronts[tid - 1] = m_ptr;
-        I_wavefronts[tid - 1] = i_ptr;
-        D_wavefronts[tid - 1] = d_ptr;
-    }
-
-    // Make sure values are written before reseting the "new" wavefront
-    __syncthreads();
-
-    // Set new wf to NULL, as new wavefront may be smaller than the
-    // previous one
-    wfa_offset_t* to_clean = M_wavefronts[curr_wf]->offsets - (max_wf_size/2);
-
-    for (int i=tid; i<max_wf_size; i+=blockDim.x) {
-        to_clean[i] = -1;
-    }
-    // ------------------------------------------------- END WF ARRAY MOVE
-
-        __syncthreads();
+    update_wf_ptr_array(
+        M_wavefronts,
+        I_wavefronts,
+        D_wavefronts,
+        active_working_set_size,
+        max_wf_size,
+        curr_wf);
 
     // TODO: Change tarket K if we don't start form WF 0 (cooperative strategy)
     const int target_k = EWAVEFRONT_DIAGONAL(tlen, plen);
@@ -548,57 +564,17 @@ __global__ void alignment_kernel (
             if (tid == 0) printf("---------------------------------------------\n");
 #endif
 
+        update_wf_ptr_array(
+            M_wavefronts,
+            I_wavefronts,
+            D_wavefronts,
+            active_working_set_size,
+            max_wf_size,
+            curr_wf);
 
-            // TODO: Assumes blockDim.x > active_working_set_size, maybe double
-            // check before launching kernel?
-            // TODO: Do this with warp shuffle primitives
-            wfa_wavefront_t* m_ptr;
-            wfa_wavefront_t* i_ptr;
-            wfa_wavefront_t* d_ptr;
-            if (tid < active_working_set_size) {
-                m_ptr = M_wavefronts[tid];
-                i_ptr = I_wavefronts[tid];
-                d_ptr = D_wavefronts[tid];
-            }
-
-            // Make sure all values are read before writing
-            __syncthreads();
-
-            if (tid == 0) {
-                M_wavefronts[active_working_set_size - 1] = m_ptr;
-                I_wavefronts[active_working_set_size - 1] = i_ptr;
-                D_wavefronts[active_working_set_size - 1] = d_ptr;
-
-                m_ptr->exist = false;
-                i_ptr->exist = false;
-                d_ptr->exist = false;
-
-            }
-            else if (tid < active_working_set_size) {
-                // From 1 to active_working_set_size - 1
-                M_wavefronts[tid - 1] = m_ptr;
-                I_wavefronts[tid - 1] = i_ptr;
-                D_wavefronts[tid - 1] = d_ptr;
-            }
-
-            // Make sure values are written before reseting the "new" wavefront
-            __syncthreads();
-
-            // Set new wf to NULL, as new wavefront may be smaller than the
-            // previous one
-            wfa_offset_t* to_clean = M_wavefronts[curr_wf]->offsets - (max_wf_size/2);
-
-            for (int i=tid; i<max_wf_size; i+=blockDim.x) {
-                to_clean[i] = -1;
-            }
-
-            // TODO; Try to sync less
-            __syncthreads();
         }
     }
 
-    // TODO: Necesary
-    __syncthreads();
 
     if  (tid == 0) {
         results[blockIdx.x].distance = distance;
