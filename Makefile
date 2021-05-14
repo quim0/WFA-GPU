@@ -19,8 +19,12 @@ aligner-debug: wfa-gpu-debug-so $(SRC_ALIGNER)
 	mkdir -p bin
 	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -ggdb -DDEBUG -o bin/wfa.affine.gpu -lwfagpu
 
+run-tests:
+	for f in bin/test-*; do ./$$f; done
+
 tests: test-packing test-alignment
-	mv $^ $(BUILD_PATH)/
+	mkdir -p bin
+	mv $^ bin/
 
 test-packing: tests/test_packing_kernel.cu wfa-gpu-debug-so
 	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS_ALIGNER) $< -lwfagpu -o $@
