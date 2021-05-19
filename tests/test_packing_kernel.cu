@@ -30,7 +30,7 @@ SET_TEST_NAME("PACKING KERNEL")
 
 const char UNPACK[4] = {'A', 'C', 'T', 'G'};
 
-bool test_one_sequence (char* sequence_packed,
+bool verify_packed_sequence (char* sequence_packed,
                         char* sequence_unpacked,
                         size_t seq_len) {
     int i;
@@ -211,18 +211,18 @@ bool test_packed_sequences (char* seqs_unpacked,
        size_t text_len = curr_alignment.text_len;
        size_t pattern_len = curr_alignment.pattern_len;
 
-       test_one_sequence(seqs_packed + curr_alignment.text_offset_packed,
+       verify_packed_sequence(seqs_packed + curr_alignment.text_offset_packed,
                          seqs_unpacked + curr_alignment.text_offset,
                          text_len);
 
-       test_one_sequence(seqs_packed + curr_alignment.pattern_offset_packed,
+       verify_packed_sequence(seqs_packed + curr_alignment.pattern_offset_packed,
                          seqs_unpacked + curr_alignment.pattern_offset,
                          pattern_len);
    }
    return true;
 }
 
-int main () {
+void test_one_sequence () {
     // One sequnce test
     size_t seq_buf_size = 1024;
     char* sequence_unpacked = (char*)calloc(seq_buf_size, 1);
@@ -233,12 +233,12 @@ int main () {
     }
 
     sequence_metadata[0].pattern_offset = 0;
-    sequence_metadata[0].pattern_len = 400;
-    strcpy(sequence_unpacked, "ACGTCGTATGACACTGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT");
+    sequence_metadata[0].pattern_len = 300;
+    strcpy(sequence_unpacked, "AGGATTGGGTGTAACAGCAACTGCTAAGGAATGGACGTAAGGAGGCTCGACATAGTCTCATGTGCTTAGACAGCTATGCGTTGGAAGCAACTGCCAACATCCAATTCGGGACGTATTGCATGTCACGATGAAAACTAGCGCGATCCTCAACTTCCTGTACGAGGCTGCCAAGGCGAGCCGGTGCCTATGACACATGACTGCACACAAAGCTACCCGACGTGAATATGCCGTGGCGACTATATTGAAACGTCATCAACGCGACCTGATATTTATTGTATCGTGTGATTCCAAGGGCCGACG");
 
-    sequence_metadata[0].text_offset = 404;
-    sequence_metadata[0].text_len = 400;
-    strcpy(sequence_unpacked + sequence_metadata[0].text_offset, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGGTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT");
+    sequence_metadata[0].text_offset = 304;
+    sequence_metadata[0].text_len = 299;
+    strcpy(sequence_unpacked + sequence_metadata[0].text_offset, "AGGATTGGGTGTAACAGCAACTGCTAAGGAATGGACGTAAGGAGGCTGACATAGTCGCATGTGCTTAGACCAGCTATGCGCTGGACTGAAACTGCCAACATCCAATTCGGGACGTATTGCATGTCACGATGAAACACTAGCGCGATCCTAACTTCCTGTAGGAGGCTGCCAAGCGAGCGGTGCCTATGACACATGACTGCATCACAAAGCTACCCGACGTGAATATGCCGTGGCGACTATATTGAAACGTCATTCAACGCGACCTGATATTACTGTATGGTGTGATTCCAAGGGCCGAC");
     size_t num_alignments = 1;
 
     char* d_seq_buf_unpacked = NULL;
@@ -305,8 +305,122 @@ int main () {
 
     free(sequence_unpacked);
     free(sequence_metadata);
-    // Multiple sequences test
-    // TODO
+    free(host_packed_buf);
+}
+
+void test_multiple_sequences () {
+    // >TGTGAAGTAATGGACGTTCTATTGGTTAAGAAATGCACCAGCTACAGCAAACTATGAGTCATCCTTTTCCATGTTAAGCCTGGTTCCTAAACACTTCGTGAAGGACGAAACTTATGCACGCGTCTGCCCAACAGAAATCCTTCGTAACCG
+    // <TGTAAAGTAATGGACGTTCTATTGGTTAAGAAATGCACCAGCTACAGCCAAACTATGAGTCATCCTTTTCCATGTTAAGCCTGGTTCCTAAACACTTCGTGAAGGACGAAACTTATGCACGCGTCTGCCCAACAGAAATCCTTCGTAACCG
+    // >ACGGGCGTGCATCACAACCCGTGATGATCGCCATAGAGCGAGGGGTGGATATGGAGACCGTGTTGACGGTCTCACATATATTTGGTCTAGCACCTTCCGACATGACTTCGTCCTAATCTTACTCGTCAAAACAAAACAATGACAAGATAA
+    // <ACGGGCGTGCATCACAACCCGGATGATCGCCATAGAGCCGAGGGGTGGATATGGAGACCGTGTTGACGGTCTCACATATATTTGGTCTAGCACCTTCCGACATGACTTCGATCCTAATCTTACTCGTCAAAACAAAACAATGACAAGATAA
+    // >ATACCCCCGTCTTATCATACGACCCTAATGCACGCGTTAGGGCGGCTTAAATCCCTCCTATCCCTGATGCCATTTGATGATGAAACTCGTGGCTAAGAAACGCCCAACTGGTCGTCTTTGTCCACCCTGGAAACGCGGGCACCCTCTTAG
+    // <ATCCCACGTCTTATCATACGACCCTAATGCACGCGTTAGGGCGGCTTAAATCCCTCCTATCCCTGATGCCATTTGATGTGAAACTCGTGGCTAAGAAACGCCCAACTGGTCGTCTTTGTCCACCCTGGAAACGCGGGCACCCTCTTAG
+
+    size_t seq_buf_size = 1024;
+    char* sequence_unpacked = (char*)calloc(seq_buf_size, 1);
+    sequence_pair_t* sequence_metadata = (sequence_pair_t*)calloc(3, sizeof(sequence_pair_t));
+    if (!sequence_unpacked || !sequence_metadata) {
+        LOG_ERROR("Can not allocate memory");
+        exit(-1);
+    }
+
+    sequence_metadata[0].pattern_offset = 0;
+    sequence_metadata[0].pattern_len = 150;
+    strcpy(sequence_unpacked, "TGTGAAGTAATGGACGTTCTATTGGTTAAGAAATGCACCAGCTACAGCAAACTATGAGTCATCCTTTTCCATGTTAAGCCTGGTTCCTAAACACTTCGTGAAGGACGAAACTTATGCACGCGTCTGCCCAACAGAAATCCTTCGTAACCG");
+
+    sequence_metadata[0].text_offset = 152;
+    sequence_metadata[0].text_len = 151;
+    strcpy(sequence_unpacked + sequence_metadata[0].text_offset, "TGTAAAGTAATGGACGTTCTATTGGTTAAGAAATGCACCAGCTACAGCCAAACTATGAGTCATCCTTTTCCATGTTAAGCCTGGTTCCTAAACACTTCGTGAAGGACGAAACTTATGCACGCGTCTGCCCAACAGAAATCCTTCGTAACCG");
+
+
+    sequence_metadata[1].pattern_offset = 308;
+    sequence_metadata[1].pattern_len = 150;
+    strcpy(sequence_unpacked + sequence_metadata[1].pattern_offset, "ACGGGCGTGCATCACAACCCGTGATGATCGCCATAGAGCGAGGGGTGGATATGGAGACCGTGTTGACGGTCTCACATATATTTGGTCTAGCACCTTCCGACATGACTTCGTCCTAATCTTACTCGTCAAAACAAAACAATGACAAGATAA");
+
+    sequence_metadata[1].text_offset = 460;
+    sequence_metadata[1].text_len = 151;
+    strcpy(sequence_unpacked + sequence_metadata[1].text_offset, "ACGGGCGTGCATCACAACCCGGATGATCGCCATAGAGCCGAGGGGTGGATATGGAGACCGTGTTGACGGTCTCACATATATTTGGTCTAGCACCTTCCGACATGACTTCGATCCTAATCTTACTCGTCAAAACAAAACAATGACAAGATAA");
+
+    sequence_metadata[2].pattern_offset = 616;
+    sequence_metadata[2].pattern_len = 150;
+    strcpy(sequence_unpacked + sequence_metadata[2].pattern_offset, "ATACCCCCGTCTTATCATACGACCCTAATGCACGCGTTAGGGCGGCTTAAATCCCTCCTATCCCTGATGCCATTTGATGATGAAACTCGTGGCTAAGAAACGCCCAACTGGTCGTCTTTGTCCACCCTGGAAACGCGGGCACCCTCTTAG");
+
+    sequence_metadata[2].text_offset = 768;
+    sequence_metadata[2].text_len = 148;
+    strcpy(sequence_unpacked + sequence_metadata[2].text_offset, "ATCCCACGTCTTATCATACGACCCTAATGCACGCGTTAGGGCGGCTTAAATCCCTCCTATCCCTGATGCCATTTGATGTGAAACTCGTGGCTAAGAAACGCCCAACTGGTCGTCTTTGTCCACCCTGGAAACGCGGGCACCCTCTTAG");
+    size_t num_alignments = 3;
+
+    char* d_seq_buf_unpacked = NULL;
+    char* d_seq_buf_packed = NULL;
+    size_t d_seq_buf_packed_size = 0;
+    sequence_pair_t* d_seq_metadata = NULL;
+
+    prepare_pack_sequences_gpu_async(
+        sequence_unpacked,
+        seq_buf_size,
+        sequence_metadata,
+        num_alignments,
+        &d_seq_buf_unpacked,
+        &d_seq_buf_packed,
+        &d_seq_buf_packed_size,
+        &d_seq_metadata,
+        0
+    );
+
+    TEST_ASSERT(d_seq_buf_packed != NULL)
+    TEST_ASSERT(d_seq_buf_unpacked != NULL)
+    TEST_ASSERT(d_seq_buf_packed_size > 0)
+    TEST_ASSERT(d_seq_metadata != NULL)
+
+    pack_sequences_gpu_async(
+        d_seq_buf_unpacked,
+        d_seq_buf_packed,
+        seq_buf_size,
+        d_seq_buf_packed_size,
+        d_seq_metadata,
+        num_alignments,
+        0
+    );
+
+    char* host_packed_buf = (char*)calloc(d_seq_buf_packed_size, 1);
+    if (!host_packed_buf) {
+        LOG_ERROR("Can not allocate memory.")
+        exit(-1);
+    }
+
+    cudaDeviceSynchronize();
+    CUDA_TEST_CHECK_ERR
+
+    cudaMemcpy(
+        host_packed_buf,
+        d_seq_buf_packed,
+        d_seq_buf_packed_size,
+        cudaMemcpyDeviceToHost
+    );
+
+    CUDA_TEST_CHECK_ERR
+
+    cudaDeviceSynchronize();
+    CUDA_TEST_CHECK_ERR
+
+    test_packed_sequences(
+        sequence_unpacked,
+        host_packed_buf,
+        seq_buf_size,
+        d_seq_buf_packed_size,
+        sequence_metadata,
+        num_alignments
+    );
+
+    free(sequence_unpacked);
+    free(sequence_metadata);
+    free(host_packed_buf);
+}
+
+int main () {
+
+    test_one_sequence();
+    test_multiple_sequences();
 
     TEST_OK
     return 0;
