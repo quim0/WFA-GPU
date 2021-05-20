@@ -28,6 +28,7 @@
 #include "utils/sequences.h"
 
 typedef int16_t wfa_offset_t;
+typedef uint32_t wfa_backtrace_t;
 
 // Make the struct aligned with pointer size to avoid unaligned acceses on the
 // wavefronts pointers arrays
@@ -36,7 +37,14 @@ typedef struct __align__(sizeof(void*)) {
     int16_t lo;
     wfa_offset_t* offsets;
     bool exist;
+    wfa_backtrace_t* backtraces;
 } wfa_wavefront_t;
+
+typedef enum {
+    OP_INS = 1,
+    OP_SUB = 2,
+    OP_DEL = 3
+} affine_op_t;
 
 __global__ void alignment_kernel (
                             const char* packed_sequences_buffer,

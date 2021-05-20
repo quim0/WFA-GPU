@@ -79,7 +79,7 @@ void test_one_alignment() {
 
 
     affine_penalties_t penalties = {.x = 2, .o = 3, .e = 1};
-    // Only one sequence in this test
+    //// Only one sequence in this test
     alignment_result_t results = {0};
 
     launch_alignments_async(
@@ -186,6 +186,7 @@ void test_multiple_alignments () {
         0
     );
 
+    cudaDeviceSynchronize();
 
     //affine_penalties_t penalties = {.x = 2, .o = 3, .e = 1};
     affine_penalties_t penalties = {.x = 1, .o = 0, .e = 1};

@@ -38,9 +38,15 @@ void launch_alignments_async (const char* packed_sequences_buffer,
     const int max_steps = 16;
     const int max_wf_size = 2 * max_steps + 1;
     const int active_working_set = max(penalties.o+penalties.e, penalties.x) + 1;
+    int offsets_elements = active_working_set * max_wf_size;
+    offsets_elements = offsets_elements + (4 - (offsets_elements % 4));
+    const int bt_elements = offsets_elements;
+
     size_t sh_mem_size = \
                     // Offsets space
-                    (active_working_set * max_wf_size * sizeof(wfa_offset_t) * 3)
+                    (offsets_elements * 3 * sizeof(wfa_offset_t))
+                    // Backtraces space
+                    + (bt_elements * 3 * sizeof(wfa_backtrace_t))
                     // Wavefronts structs space
                     + (active_working_set * sizeof(wfa_wavefront_t) * 3)
                     // Wavefronts pointers arrays space
@@ -51,7 +57,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
     dim3 blockSize(64);
 
     // TODO !!!!!!!!
-    sh_mem_size *= 10;
+    //sh_mem_size *= 10;
 
     LOG_DEBUG("Launching %d blocks of %d threads with %.2fKiB of shared memory",
               gridSize.x, blockSize.x, (float(sh_mem_size) / (2 << 10)));
