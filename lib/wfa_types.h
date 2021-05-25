@@ -19,16 +19,16 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef ALIGNMENT_RESULTS_H
-#define ALIGNMENT_RESULTS_H
+#ifndef WFA_TYPES_H
+#define WFA_TYPES_H
 
-#include "wfa_types.h"
-#include "sequence_alignment.cuh"
+typedef int16_t wfa_offset_t;
+typedef uint32_t wfa_backtrace_t;
 
-typedef struct {
-    int distance;
-    int steps;
-    wfa_backtrace_t backtrace;
-} alignment_result_t;
+typedef enum {
+    OP_INS = 1,
+    OP_SUB = 2,
+    OP_DEL = 3
+} affine_op_t;
 
 #endif
