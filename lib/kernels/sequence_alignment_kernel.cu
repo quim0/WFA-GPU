@@ -74,13 +74,6 @@ __device__ wfa_offset_t WF_extend_kernel (const char* text,
     int v  = EWAVEFRONT_V(k, offset_k);
     int h  = EWAVEFRONT_H(k, offset_k);
 
-    // TODO: remove
-    const int target_k = EWAVEFRONT_DIAGONAL(tlen, plen);
-    if (blockIdx.x == 0 && k == target_k) {
-        printf("tlen: %d, plen: %d\n", tlen, plen);
-    }
-
-
     const int bases_to_cmp = 16;
     int eq_elements = 0;
     int acc = 0;
@@ -175,6 +168,7 @@ __device__ void next_M (wfa_wavefront_t** M_wavefronts,
                                        tlen, plen, k, curr_offset);
 
         M_wavefronts[curr_wf]->offsets[k] = curr_offset;
+
         M_wavefronts[curr_wf]->backtraces[k] = (prev_wf->backtraces[k] << 2) | OP_SUB;
     }
 
@@ -347,9 +341,6 @@ __device__ void next_MDI (wfa_wavefront_t** M_wavefronts,
     const int lo    = min(prev_wf_x->lo, lo_ID);
 
     for (int k=lo + threadIdx.x; k <= hi; k+=blockDim.x) {
-        // TODO: remove
-        const int target_k = EWAVEFRONT_DIAGONAL(tlen, plen);
-
         // ~I offsets
         const wfa_offset_t I_gap_open_offset = prev_wf_o->offsets[k - 1] + 1;
         const wfa_backtrace_t I_gap_open_bt = prev_wf_o->backtraces[k - 1];
@@ -375,7 +366,6 @@ __device__ void next_MDI (wfa_wavefront_t** M_wavefronts,
         I_wavefronts[curr_wf]->backtraces[k] = I_backtrace;
         I_offset_pb = (uint64_t)(((uint64_t)I_offset << 32) | I_backtrace);
 
-
         // ~D offsets
         const wfa_offset_t D_gap_open_offset = prev_wf_o->offsets[k + 1];
         const wfa_backtrace_t D_gap_open_bt = prev_wf_o->backtraces[k + 1];
@@ -395,9 +385,6 @@ __device__ void next_MDI (wfa_wavefront_t** M_wavefronts,
         const wfa_offset_t D_offset = (wfa_offset_t)(D_offset_pb >> 32);
         D_wavefronts[curr_wf]->offsets[k] = D_offset;
 
-        //if (blockIdx.x == 0 && k == 0 ) printf("I_OFFSET: %d\n", I_offset);
-        //if (blockIdx.x == 0 && k == 0) printf("D_OFFSET: %d\n", D_offset);
-
         // ~D backtraces
         wfa_backtrace_t D_backtrace = (wfa_backtrace_t)(D_offset_pb & 0xffffffff);
         D_backtrace = (D_backtrace << 2) | OP_DEL;
@@ -406,17 +393,9 @@ __device__ void next_MDI (wfa_wavefront_t** M_wavefronts,
 
         // ~M update
         const wfa_offset_t X_offset = prev_wf_x->offsets[k] + 1;
-        //if (blockIdx.x == 0 && k == 0 ) printf("X_OFFSET: %d\n", X_offset);
         const wfa_backtrace_t X_backtrace = (prev_wf_x->backtraces[k] << 2) | OP_SUB;
         const int64_t X_offset_pb = (int64_t)
                                      (((uint64_t)X_offset << 32) | X_backtrace);
-        //if (blockIdx.x == 0 && k == 0) printf("X_OFFSET_pb: %lld\n", X_offset_pb);
-        //if (blockIdx.x == 0 && k == target_k) printf("I_BACKTRACE: %d (%llu)\n",
-        //    I_backtrace, I_offset_pb);
-        //if (blockIdx.x == 0 && k == target_k) printf("D_BACKTRACE: %d (%llu)\n",
-        //    D_backtrace, D_offset_pb);
-        //if (blockIdx.x == 0 && k == target_k) printf("X_BACKTRACE: %d (%llu)\n",
-        //    X_backtrace, X_offset_pb);
 
         const int64_t M_offset_pb = max(
                                         max(X_offset_pb, D_offset_pb),
@@ -427,15 +406,7 @@ __device__ void next_MDI (wfa_wavefront_t** M_wavefronts,
                                             (M_offset_pb & 0xffffffff);
         M_wavefronts[curr_wf]->backtraces[k] = M_backtrace;
         wfa_offset_t M_offset = (wfa_offset_t)(M_offset_pb >> 32);
-        //if (blockIdx.x == 0 && k == target_k) printf("M_BACKTRACE: %d, off_pb: %lld\n", M_backtrace, M_offset_pb);
-
-        //int prev = M_offset;
-        //if (blockIdx.x == 0 && k == target_k ) printf("OFFSET: %llu\n", M_offset_pb);
-        //if (blockIdx.x == 0 && k == target_k ) printf("MID (k=%d) before_ext: %d, ", k, M_offset);
-        //if (blockIdx.x == 0 && k == 0 ) printf("M_OFFSET: %d\n", M_offset);
         M_offset = WF_extend_kernel(text, pattern, tlen, plen, k, M_offset);
-        //if (blockIdx.x == 0 && k == 0 ) printf("M_OFFSET (ext): %d (+%d)\n", M_offset, M_offset - prev);
-        //if (blockIdx.x == 0 && k == target_k) printf("after_ext: %d (+%d)\n", M_offset, M_offset - prev);
 
         M_wavefronts[curr_wf]->offsets[k] = M_offset;
     }
@@ -665,7 +636,6 @@ __global__ void alignment_kernel (
 
             // TODO: Optimize this if-else nightmare
             if (!I_exist && !D_exist && !M_exist) {
-                //if (tid == 0) printf("pass distance!\n");
                 distance++;
             } else {
                 if (M_exist && !I_exist && !D_exist) {
@@ -691,11 +661,6 @@ __global__ void alignment_kernel (
                                 text, pattern, tlen, plen);
                         }
                     }
-                }
-                if (blockIdx.x == 0 && tid == 0) {
-                    printf("id: %d, distance: %d, steps: %d, offset: %d (%d), backtrace: %d\n", blockIdx.x, distance, steps,
-                    M_wavefronts[curr_wf]->offsets[target_k], target_offset,
-                    M_wavefronts[curr_wf]->backtraces[target_k]);
                 }
 
                 if (target_k_abs <= distance && M_wavefronts[curr_wf]->exist && M_wavefronts[curr_wf]->offsets[target_k] == target_offset) {
@@ -736,7 +701,6 @@ __global__ void alignment_kernel (
 
 
     if  (tid == 0) {
-        //if (blockIdx.x == 0) printf("Alignment: %d, distance: %d, steps: %d\n", blockIdx.x, distance, steps);
         results[blockIdx.x].distance = distance;
         results[blockIdx.x].steps = steps;
         results[blockIdx.x].backtrace = M_wavefronts[curr_wf]->backtraces[target_k];
