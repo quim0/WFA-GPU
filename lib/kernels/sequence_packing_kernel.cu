@@ -48,59 +48,51 @@ __global__ void compact_sequences (const char* const sequences_in,
     // Sequence cache
     extern __shared__ char sequence_sh[];
 
-    size_t read_bytes = 0;
-    do {
-        // Load cache
-        for (int i=threadIdx.x*4; (i<(shared_memory_size/4)) && (i < sequence_unpacked_length); i += blockDim.x*4) {
-            *(uint32_t*)(&sequence_sh[i]) = *(uint32_t*)(&sequence_unpacked[read_bytes + i]);
-        }
+    // Each sequence buffer is 32 bits aligned
+    const int seq_buffer_len = sequence_unpacked_length
+                               + (4 - (sequence_unpacked_length % 4));
+    // Each thread packs 4 bytes into 1 byte.
+    for (int i=threadIdx.x; i<(seq_buffer_len/4); i += blockDim.x) {
+        uint32_t bases = *((uint32_t*)(sequence_unpacked + i*4));
+        if (bases == 0)
+            break;
 
-        __syncthreads();
+        // Extract bases SIMD like --> (base & 6) >> 1 for each element
+        bases = (bases & 0x06060606) >> 1;
 
-        // Each thread packs 4 bytes into 1 byte.
-        for (int i=threadIdx.x; i<(sequence_unpacked_length/4); i += blockDim.x) {
-            uint32_t bases = *((uint32_t*)(sequence_unpacked + i*4));
-            if (bases == 0)
+        const uint8_t base0 = bases & 0xff;
+        const uint8_t base1 = (bases >> 8) & 0xff;
+        const uint8_t base2 = (bases >> 16) & 0xff;
+        const uint8_t base3 = (bases >> 24) & 0xff;
+
+        // Reverse the bases, because they are read in little endian
+        uint8_t packed_reg = base3;
+        packed_reg |= (base2 << 2);
+        packed_reg |= (base1 << 4);
+        packed_reg |= (base0 << 6);
+
+        // Byte idx if we were packing the sequences in big endian
+        const int be_idx = i;
+
+        // Save to the correct by to be little endian encoded for 32bits ints
+        // TODO: Byte perm
+        int le_byte_idx;
+        switch (be_idx % 4) {
+            case 0:
+                le_byte_idx = be_idx + (3 - (be_idx % 4));
                 break;
-
-            // Extract bases SIMD like --> (base & 6) >> 1 for each element
-            bases = (bases & 0x06060606) >> 1;
-
-            const uint8_t base0 = bases & 0xff;
-            const uint8_t base1 = (bases >> 8) & 0xff;
-            const uint8_t base2 = (bases >> 16) & 0xff;
-            const uint8_t base3 = (bases >> 24) & 0xff;
-
-            // Reverse the bases, because they are read in little endian
-            uint8_t packed_reg = base3;
-            packed_reg |= (base2 << 2);
-            packed_reg |= (base1 << 4);
-            packed_reg |= (base0 << 6);
-
-            // Byte idx if we were packing the sequences in big endian
-            const int be_idx = i;
-
-            // Save to the correct by to be little endian encoded for 32bits ints
-            int le_byte_idx;
-            switch (be_idx % 4) {
-                case 0:
-                    le_byte_idx = be_idx + (3 - (be_idx % 4));
-                    break;
-                case 1:
-                    le_byte_idx = be_idx + (be_idx % 4);
-                    break;
-                case 2:
-                    le_byte_idx = be_idx - (3 - (be_idx % 4));
-                    break;
-                case 3:
-                default:
-                    le_byte_idx = be_idx - (be_idx % 4);
-                    break;
-            }
-
-            sequence_packed[le_byte_idx] = packed_reg;
+            case 1:
+                le_byte_idx = be_idx + (be_idx % 4);
+                break;
+            case 2:
+                le_byte_idx = be_idx - (3 - (be_idx % 4));
+                break;
+            case 3:
+            default:
+                le_byte_idx = be_idx - (be_idx % 4);
+                break;
         }
 
-        read_bytes += shared_memory_size;
-    } while ((read_bytes+shared_memory_size) < sequence_unpacked_length);
+        sequence_packed[le_byte_idx] = packed_reg;
+    }
 }
