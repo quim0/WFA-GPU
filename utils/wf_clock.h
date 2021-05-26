@@ -26,15 +26,23 @@
 
 #include <time.h>
 
-#ifdef DEBUG
-
-#define DEBUG_CLOCK_INIT() struct timespec wf_clock_now, wf_clock_tmstart; double wf_clock_seconds;
-#define DEBUG_CLOCK_START() clock_gettime(CLOCK_REALTIME, &wf_clock_tmstart);
-#define DEBUG_CLOCK_STOP(text) \
+#define CLOCK_INIT() struct timespec wf_clock_now, wf_clock_tmstart; double wf_clock_seconds;
+#define CLOCK_START() clock_gettime(CLOCK_REALTIME, &wf_clock_tmstart);
+#define CLOCK_STOP(text) \
     clock_gettime(CLOCK_REALTIME, &wf_clock_now); \
     wf_clock_seconds = (double)((wf_clock_now.tv_sec+wf_clock_now.tv_nsec*1e-9) - \
                        (double)(wf_clock_tmstart.tv_sec+wf_clock_tmstart.tv_nsec*1e-9)); \
-    LOG_DEBUG("%s Wall time %fs", text, wf_clock_seconds);
+    printf("%s: Wall time %fs", text, wf_clock_seconds);
+
+#ifdef DEBUG
+
+#define DEBUG_CLOCK_INIT() struct timespec wf_clock_debug_now, wf_clock_debug_tmstart; double wf_clock_debug_seconds;
+#define DEBUG_CLOCK_START() clock_gettime(CLOCK_REALTIME, &wf_clock_debug_tmstart);
+#define DEBUG_CLOCK_STOP(text) \
+    clock_gettime(CLOCK_REALTIME, &wf_clock_debug_now); \
+    wf_clock_debug_seconds = (double)((wf_clock_debug_now.tv_sec+wf_clock_debug_now.tv_nsec*1e-9) - \
+                       (double)(wf_clock_debug_tmstart.tv_sec+wf_clock_debug_tmstart.tv_nsec*1e-9)); \
+    LOG_DEBUG("%s: Wall time %fs", text, wf_clock_debug_seconds);
 
 #else
 

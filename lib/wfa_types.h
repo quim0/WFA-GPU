@@ -22,6 +22,8 @@
 #ifndef WFA_TYPES_H
 #define WFA_TYPES_H
 
+#include "stdint.h"
+
 typedef int16_t wfa_offset_t;
 typedef uint32_t wfa_backtrace_t;
 
