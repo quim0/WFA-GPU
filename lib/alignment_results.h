@@ -27,7 +27,6 @@
 
 typedef struct {
     int distance;
-    int steps;
     wfa_backtrace_t backtrace;
 } alignment_result_t;
 

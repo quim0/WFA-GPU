@@ -702,7 +702,6 @@ __global__ void alignment_kernel (
 
     if  (tid == 0) {
         results[blockIdx.x].distance = distance;
-        results[blockIdx.x].steps = steps;
         results[blockIdx.x].backtrace = M_wavefronts[curr_wf]->backtraces[target_k];
     }
 }

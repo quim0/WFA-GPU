@@ -293,7 +293,6 @@ void test_multiple_alignments_affine () {
         size_t tlen = sequence_metadata[i].text_len;
         size_t plen = sequence_metadata[i].pattern_len;
         int distance = results[i].distance;
-        int steps = results[i].steps;
         char* cigar = recover_cigar(text, pattern, tlen,
                                     plen,results[i].backtrace);
 
