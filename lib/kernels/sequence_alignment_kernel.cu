@@ -21,7 +21,12 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include <cuda_runtime.h>
 #include "sequence_alignment_kernel.cuh"
+
+#define MAX_PB(A, B) llmax((A), (B))
+#define MAX(A, B) max((A), (B))
+#define MIN(A, B) min((A), (B))
 
 #ifdef DEBUG
 
@@ -193,8 +198,8 @@ __device__ void next_MI (wfa_wavefront_t** M_wavefronts,
     const wfa_wavefront_t* prev_wf_o = M_wavefronts[curr_wf - o - e];
     const wfa_wavefront_t* prev_wf_e = I_wavefronts[curr_wf - e];
 
-    const int hi = max(prev_wf_x->hi, max(prev_wf_o->hi, prev_wf_e->hi)) + 1;
-    const int lo = min(prev_wf_x->lo, max(prev_wf_o->lo, prev_wf_e->lo)) - 1;
+    const int hi = MAX(prev_wf_x->hi, MAX(prev_wf_o->hi, prev_wf_e->hi)) + 1;
+    const int lo = MIN(prev_wf_x->lo, MAX(prev_wf_o->lo, prev_wf_e->lo)) - 1;
 
     for (int k=lo + threadIdx.x; k <= hi; k+=blockIdx.x) {
         wfa_offset_t gap_open_offset = prev_wf_o->offsets[k - 1] + 1;
@@ -208,8 +213,8 @@ __device__ void next_MI (wfa_wavefront_t** M_wavefronts,
         uint64_t gap_extend_offset_pb = (uint64_t)((uint64_t)gap_extend_offset << 32)
                                         | gap_extend_bt;
 
-        uint64_t I_offset_pb = max(gap_open_offset_pb,
-                                   gap_extend_offset_pb);
+        uint64_t I_offset_pb = MAX_PB(gap_open_offset_pb,
+                                      gap_extend_offset_pb);
 
         // Update offsets in the ~I pyramid
         wfa_offset_t I_offset = (wfa_offset_t)(I_offset_pb >> 32);
@@ -226,7 +231,7 @@ __device__ void next_MI (wfa_wavefront_t** M_wavefronts,
         const wfa_backtrace_t X_backtrace = (prev_wf_x->backtraces[k] << 2) | OP_SUB;
         const uint64_t X_offset_pb = ((uint64_t)X_offset << 32) | X_backtrace;
 
-        const uint64_t M_offset_pb = max(X_offset_pb, I_offset_pb);
+        const uint64_t M_offset_pb = MAX_PB(X_offset_pb, I_offset_pb);
 
         const wfa_backtrace_t M_backtrace = (wfa_backtrace_t) \
                                             (M_offset_pb & 0xffffffff);
@@ -263,8 +268,8 @@ __device__ void next_MD (wfa_wavefront_t** M_wavefronts,
     const wfa_wavefront_t* prev_wf_o = M_wavefronts[curr_wf - o - e];
     const wfa_wavefront_t* prev_wf_e = D_wavefronts[curr_wf - e];
 
-    const int hi = max(prev_wf_x->hi, max(prev_wf_o->hi, prev_wf_e->hi) + 1);
-    const int lo = min(prev_wf_x->lo, max(prev_wf_o->lo, prev_wf_e->lo) - 1);
+    const int hi = MAX(prev_wf_x->hi, MAX(prev_wf_o->hi, prev_wf_e->hi) + 1);
+    const int lo = MIN(prev_wf_x->lo, MAX(prev_wf_o->lo, prev_wf_e->lo) - 1);
 
     for (int k=lo + threadIdx.x; k <= hi; k+=blockIdx.x) {
         wfa_offset_t gap_open_offset = prev_wf_o->offsets[k + 1];
@@ -278,8 +283,8 @@ __device__ void next_MD (wfa_wavefront_t** M_wavefronts,
         uint64_t gap_extend_offset_pb = (uint64_t)
                             ((uint64_t)gap_extend_offset << 32) | gap_extend_bt;
 
-        uint64_t D_offset_pb = max(gap_open_offset_pb,
-                                            gap_extend_offset_pb);
+        uint64_t D_offset_pb = MAX_PB(gap_open_offset_pb,
+                                      gap_extend_offset_pb);
 
         // Update offsets in the ~D pyramid
         wfa_offset_t D_offset = (wfa_offset_t)(D_offset_pb >> 32);
@@ -296,7 +301,7 @@ __device__ void next_MD (wfa_wavefront_t** M_wavefronts,
         const wfa_backtrace_t X_backtrace = (prev_wf_x->backtraces[k] << 2) | OP_SUB;
         const uint64_t X_offset_pb = ((uint64_t)X_offset << 32) | X_backtrace;
 
-        const uint64_t M_offset_pb = max(X_offset_pb, D_offset_pb);
+        const uint64_t M_offset_pb = MAX_PB(X_offset_pb, D_offset_pb);
         const wfa_backtrace_t M_backtrace = (wfa_backtrace_t) \
                                             (M_offset_pb & 0xffffffff);
 
@@ -335,10 +340,10 @@ __device__ void next_MDI (wfa_wavefront_t** M_wavefronts,
     const wfa_wavefront_t* prev_I_wf_e = I_wavefronts[curr_wf - e];
     const wfa_wavefront_t* prev_D_wf_e = D_wavefronts[curr_wf - e];
 
-    const int hi_ID = max(prev_wf_o->hi, max(prev_I_wf_e->hi, prev_D_wf_e->hi)) + 1;
-    const int hi    = max(prev_wf_x->hi, hi_ID);
-    const int lo_ID = min(prev_wf_o->lo, min(prev_I_wf_e->lo, prev_D_wf_e->lo)) - 1;
-    const int lo    = min(prev_wf_x->lo, lo_ID);
+    const int hi_ID = MAX(prev_wf_o->hi, MAX(prev_I_wf_e->hi, prev_D_wf_e->hi)) + 1;
+    const int hi    = MAX(prev_wf_x->hi, hi_ID);
+    const int lo_ID = MIN(prev_wf_o->lo, MIN(prev_I_wf_e->lo, prev_D_wf_e->lo)) - 1;
+    const int lo    = MIN(prev_wf_x->lo, lo_ID);
 
     for (int k=lo + threadIdx.x; k <= hi; k+=blockDim.x) {
         // ~I offsets
@@ -354,8 +359,8 @@ __device__ void next_MDI (wfa_wavefront_t** M_wavefronts,
                                                 ((uint64_t)I_gap_extend_offset << 32)
                                                 | I_gap_extend_bt;
 
-        int64_t I_offset_pb = max(I_gap_open_offset_pb,
-                                        I_gap_extend_offset_pb);
+        int64_t I_offset_pb = MAX_PB(I_gap_open_offset_pb,
+                                     I_gap_extend_offset_pb);
 
         const wfa_offset_t I_offset = (wfa_offset_t)(I_offset_pb >> 32);
         I_wavefronts[curr_wf]->offsets[k] = I_offset;
@@ -379,8 +384,8 @@ __device__ void next_MDI (wfa_wavefront_t** M_wavefronts,
                                                 ((uint64_t)D_gap_extend_offset << 32)
                                                 | D_gap_extend_bt;
 
-        int64_t D_offset_pb = max(D_gap_open_offset_pb,
-                                        D_gap_extend_offset_pb);
+        int64_t D_offset_pb = MAX_PB(D_gap_open_offset_pb,
+                                     D_gap_extend_offset_pb);
 
         const wfa_offset_t D_offset = (wfa_offset_t)(D_offset_pb >> 32);
         D_wavefronts[curr_wf]->offsets[k] = D_offset;
@@ -397,8 +402,8 @@ __device__ void next_MDI (wfa_wavefront_t** M_wavefronts,
         const int64_t X_offset_pb = (int64_t)
                                      (((uint64_t)X_offset << 32) | X_backtrace);
 
-        const int64_t M_offset_pb = max(
-                                        max(X_offset_pb, D_offset_pb),
+        const int64_t M_offset_pb = MAX_PB(
+                                        MAX_PB(X_offset_pb, D_offset_pb),
                                         I_offset_pb
                                         );
 
@@ -506,7 +511,7 @@ __global__ void alignment_kernel (
     extern __shared__ char sh_mem[];
 
     // TODO: +1 because of the current wf?
-    const int active_working_set_size = max(o+e, x) + 1;
+    const int active_working_set_size = MAX(o+e, x) + 1;
     const int max_wf_size = 2 * max_steps + 1;
 
     // Offsets and backtraces must be 32 bits aligned to avoid unaligned access
