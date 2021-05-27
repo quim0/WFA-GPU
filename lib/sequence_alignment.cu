@@ -48,9 +48,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                     // Backtraces space
                     + (bt_elements * 3 * sizeof(wfa_backtrace_t))
                     // Wavefronts structs space
-                    + (active_working_set * sizeof(wfa_wavefront_t) * 3)
-                    // Wavefronts pointers arrays space
-                    + (active_working_set * sizeof(wfa_wavefront_t*) * 3);
+                    + (active_working_set * sizeof(wfa_wavefront_t) * 3);
 
     // TODO
     dim3 gridSize(num_alignments);
