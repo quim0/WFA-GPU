@@ -102,24 +102,18 @@ void pack_sequences_gpu_async (const char* const d_sequences_buffer_unpacked,
                                const sequence_pair_t* d_sequences_metadata,
                                size_t num_alignments,
                                cudaStream_t stream) {
-    // Allocate 4KiB of shared memory to store unpacked sequence
-    // Shared memory size must be a multiple of 32 bit (4 bytes)
-    // TODO: Fine tune this number
-    size_t sh_mem = 4 << 10;
 
     dim3 gridSize(num_alignments * 2);
     // TODO: Make this editable as a runtime parameter or in compile time
     // Number of threads working per sequence
     dim3 blockSize(512);
 
-    LOG_DEBUG("Launching packing kernel with %d threads per block. %d blocks."
-              " Using %.2fKiB of shared memory.",
-               blockSize.x, gridSize.x, float(sh_mem) / (1 << 10))
+    LOG_DEBUG("Launching packing kernel with %d threads per block. %d blocks.",
+               blockSize.x, gridSize.x)
 
-    compact_sequences<<<gridSize, blockSize, sh_mem, stream>>>(
+    compact_sequences<<<gridSize, blockSize, 0, stream>>>(
                                             d_sequences_buffer_unpacked,
                                             d_sequences_buffer_packed,
-                                            d_sequences_metadata,
-                                            sh_mem);
+                                            d_sequences_metadata);
     CUDA_CHECK_ERR
 }

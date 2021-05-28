@@ -26,7 +26,6 @@
 
 __global__ void compact_sequences (const char* const sequences_in,
                                    char* const sequences_out,
-                                   const sequence_pair_t* sequences_metadata,
-                                   const size_t shared_memory_size);
+                                   const sequence_pair_t* sequences_metadata);
 
 #endif

@@ -52,10 +52,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
 
     // TODO
     dim3 gridSize(num_alignments);
-    dim3 blockSize(64);
-
-    // TODO !!!!!!!!
-    //sh_mem_size *= 10;
+    dim3 blockSize(32);
 
     LOG_DEBUG("Launching %d blocks of %d threads with %.2fKiB of shared memory",
               gridSize.x, blockSize.x, (float(sh_mem_size) / (2 << 10)));

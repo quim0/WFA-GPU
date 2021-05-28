@@ -26,8 +26,7 @@
 // Encode one sequence from 8 to 2 bits
 __global__ void compact_sequences (const char* const sequences_in,
                                    char* const sequences_out,
-                                   const sequence_pair_t* sequences_metadata,
-                                   const size_t shared_memory_size) {
+                                   const sequence_pair_t* sequences_metadata) {
     const size_t sequence_idx = blockIdx.x;
     const sequence_pair_t curr_alignment = sequences_metadata[sequence_idx / 2];
     const char* sequence_unpacked;
@@ -42,11 +41,6 @@ __global__ void compact_sequences (const char* const sequences_in,
         sequence_unpacked_length = curr_alignment.text_len;
         sequence_packed = &sequences_out[curr_alignment.text_offset_packed];
     }
-    //size_t sequence_packed_length = sequence_unpacked_length -
-    //                                    (4 - (sequence_unpacked_length % 4));
-
-    // Sequence cache
-    extern __shared__ char sequence_sh[];
 
     // Each sequence buffer is 32 bits aligned
     const int seq_buffer_len = sequence_unpacked_length
