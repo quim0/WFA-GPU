@@ -80,10 +80,15 @@ int main(int argc, char** argv) {
 
     DEBUG_CLOCK_STOP("File read.")
 
+    CLOCK_INIT()
+    CLOCK_START()
+
     launch_batch_async(
         sequence_reader.sequences_buffer,
         sequence_reader.sequences_buffer_size,
         sequence_reader.sequences_metadata,
         sequence_reader.num_sequences_read / 2
     );
+
+    CLOCK_STOP("Alignment computed")
 }
