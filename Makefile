@@ -50,7 +50,7 @@ wfa-gpu-debug-so: $(SRC_LIB)
 
 wfa-gpu-profile-so: $(SRC_LIB)
 	mkdir -p build
-	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS) -Xcompiler -fPIC -dc $^
+	$(NVCC) $(NVCC_OPTIONS) -lineinfo $(ARGS) -Xcompiler -fPIC -dc $^
 	mv *.o build/
 	$(NVCC) $(NVCC_OPTIONS) -lineinfo -shared -o build/libwfagpu.so build/*.o -lcudart
 
