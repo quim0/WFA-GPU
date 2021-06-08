@@ -62,16 +62,25 @@ extern "C" void launch_batch_async (const char* sequences_buffer,
 
     // Alignment
     // TODO: This is not async for now, take this from args
-    affine_penalties_t penalties = {.x = 2, .o = 3, .e = 1};
+    affine_penalties_t penalties = {.x = 1, .o = 0, .e = 1};
+
+    // TODO: Get resultst and backtraces from function parameters
     alignment_result_t* results = (alignment_result_t*)calloc(num_alignments, sizeof(alignment_result_t));
+    wfa_backtrace_t* backtraces = (wfa_backtrace_t*)calloc(
+                                                    BT_OFFLOADED_ELEMENTS(256) * num_alignments,
+                                                    sizeof(wfa_backtrace_t)
+                                                    );
 
     launch_alignments_async(
         d_seq_buffer_unpacked,
         d_sequences_metadata,
         num_alignments,
         penalties,
-        results
+        results,
+        backtraces
     );
+
+    // TODO
 
     // Backtrace & CIGAR recovery
 

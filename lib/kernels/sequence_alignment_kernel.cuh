@@ -29,9 +29,7 @@
 #include "utils/sequences.h"
 
 
-// Make the struct aligned with pointer size to avoid unaligned acceses on the
-// wavefronts pointers arrays
-typedef struct __align__(sizeof(void*)) {
+typedef struct {
     int16_t hi;
     int16_t lo;
     wfa_offset_t* offsets;
@@ -45,6 +43,7 @@ __global__ void alignment_kernel (
                             const size_t num_alignments,
                             const int max_steps,
                             const affine_penalties_t penalties,
+                            wfa_backtrace_t* offloaded_backtraces_global,
                             alignment_result_t* results);
 
 #define EWAVEFRONT_V(k,offset) ((offset)-(k))

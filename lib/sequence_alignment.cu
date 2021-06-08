@@ -24,18 +24,46 @@
 #include "utils/logger.h"
 #include "sequence_alignment.cuh"
 
+// TODO: Why it does not detect the macro in the header file ? this should be
+//       removed.
+#define BT_OFFLOADED_ELEMENTS(max_steps) \
+                        ((max_steps) * 2 + 1) \
+                        * ((max_steps) * 2 / 8)
+
 void launch_alignments_async (const char* packed_sequences_buffer,
                               const sequence_pair_t* sequences_metadata,
                               const size_t num_alignments,
                               const affine_penalties_t penalties,
-                              alignment_result_t* results) {
+                              alignment_result_t* const results,
+                              wfa_backtrace_t* const backtraces) {
     // TODO: Free results_d
     alignment_result_t *results_d;
     cudaMalloc(&results_d, num_alignments * sizeof(alignment_result_t));
     CUDA_CHECK_ERR
 
+    const int max_steps = 256;
+
+    // TODO: Free backtraces_offloaded_d
+    wfa_backtrace_t *bt_offloaded_d;
+    size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(max_steps);
+
+    if (bt_offloaded_size >= (1<<16)) {
+        LOG_ERROR("Trying to allocate more backtrace elements than the ones"
+                  " that we can address")
+        exit(-1);
+    }
+
+    bt_offloaded_size *= num_alignments;
+
+    LOG_DEBUG("Allocating %zu MiB to store backtraces of %zu alignments.",
+              (bt_offloaded_size * sizeof(wfa_backtrace_t)) / (1 << 20),
+              num_alignments)
+
+    cudaMalloc(&bt_offloaded_d,
+               bt_offloaded_size * sizeof(wfa_backtrace_t));
+    CUDA_CHECK_ERR
+
     // TODO: Reduction of penalties
-    const int max_steps = 16;
     const int max_wf_size = 2 * max_steps + 1;
     const int active_working_set = max(penalties.o+penalties.e, penalties.x) + 1;
     int offsets_elements = active_working_set * max_wf_size;
@@ -48,7 +76,10 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                     // Backtraces space
                     + (bt_elements * 3 * sizeof(wfa_backtrace_t))
                     // Wavefronts structs space
-                    + (active_working_set * sizeof(wfa_wavefront_t) * 3);
+                    + (active_working_set * sizeof(wfa_wavefront_t) * 3)
+                    // Position of the last used element in the offloaded
+                    // backtraces. It will be atomically increased.
+                    + sizeof(int);
 
     // TODO
     dim3 gridSize(num_alignments);
@@ -66,13 +97,17 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                                               num_alignments,
                                               max_steps,
                                               penalties,
+                                              bt_offloaded_d,
                                               results_d);
 
     // TODO: Make this async, another function to copy the results?
     cudaDeviceSynchronize();
     CUDA_CHECK_ERR
 
+    // TODO: Unify results and backtraces memory buffers to do a signle memcpy
     cudaMemcpy(results, results_d, num_alignments * sizeof(alignment_result_t),
                cudaMemcpyDeviceToHost);
+    CUDA_CHECK_ERR
+    cudaMemcpy(backtraces, bt_offloaded_d, bt_offloaded_size * sizeof(wfa_backtrace_t), cudaMemcpyDeviceToHost);
     CUDA_CHECK_ERR
 }

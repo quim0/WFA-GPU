@@ -83,8 +83,8 @@ void prepare_pack_sequences_gpu_async (const char* sequences_buffer,
     *device_sequences_buffer_packed_size = mem_needed_packed;
 
     size_t mem_needed_metadata = num_alignments * sizeof(sequence_pair_t);
-    LOG_DEBUG("Allocating %.2f KiB to store the packed sequences metadata on "
-              "the device.", float(mem_needed_metadata) / (1<<10));
+    LOG_DEBUG("Allocating %.2f MiB to store the packed sequences metadata on "
+              "the device.", float(mem_needed_metadata) / (1<<20));
     cudaMalloc(device_sequences_metadata, mem_needed_metadata);
     CUDA_CHECK_ERR
 

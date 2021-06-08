@@ -25,7 +25,15 @@
 #include "stdint.h"
 
 typedef int16_t wfa_offset_t;
-typedef uint32_t wfa_backtrace_t;
+
+// 31 --------------- 15 ---------------- 0
+//       backtrace        last_bt_offset
+typedef uint32_t wfa_backtrace_packed_t;
+
+typedef struct __align__(4) {
+    uint16_t backtrace;
+    uint16_t prev;
+} wfa_backtrace_t;
 
 typedef enum {
     OP_INS = 1,
