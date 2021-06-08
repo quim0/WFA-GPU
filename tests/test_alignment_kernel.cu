@@ -101,6 +101,63 @@ __host__ bool check_cigar_edit (const char* text,
 	return true;
 }
 
+__host__ bool check_affine_distance (const char* text,
+                                     const char* pattern,
+                                     const int tlen,
+                                     const int plen,
+                                     const int distance,
+                                     const affine_penalties_t penalties,
+                                     const char* cigar) {
+    bool extending_I = false, extending_D = false;
+    int cigar_len = strnlen(cigar, tlen + plen);
+    int result_distance = 0;
+
+    for (int i=0; i<cigar_len; i++) {
+        char curr_op = cigar[i];
+
+        switch (curr_op) {
+            case 'M':
+                if (extending_D) extending_D = false;
+                if (extending_I) extending_I = false;
+                break;
+            case 'I':
+                if (extending_D) {
+                    extending_D = false;
+                    extending_I = true;
+                    result_distance += penalties.o + penalties.e;
+                } else if (extending_I) {
+                    result_distance += penalties.e;
+                } else {
+                    extending_I = true;
+                    result_distance += penalties.o + penalties.e;
+                }
+                break;
+            case 'D':
+                if (extending_I) {
+                    extending_D = true;
+                    extending_I = false;
+                    result_distance += penalties.o + penalties.e;
+                } else if (extending_D) {
+                    result_distance += penalties.e;
+                } else {
+                    extending_D = true;
+                    result_distance += penalties.o + penalties.e;
+                }
+                break;
+            case 'X':
+                if (extending_D) extending_D = false;
+                if (extending_I) extending_I = false;
+                result_distance += penalties.x;
+                break;
+            default:
+                LOG_ERROR("Incorrect cigar generated")
+                TEST_ASSERT(false);
+        }
+    }
+
+    return result_distance == distance;
+}
+
 
 wfa_offset_t extend_wavefront (
         const wfa_offset_t offset_val,
@@ -475,8 +532,12 @@ void test_multiple_alignments_affine () {
                                     plen,results[i].backtrace,
                                     backtraces + backtraces_offloaded_elements*i);
 
-        bool correct = check_cigar_edit(text, pattern, tlen, plen, cigar);
-        TEST_ASSERT(correct)
+        bool correct_cigar = check_cigar_edit(text, pattern, tlen, plen, cigar);
+        TEST_ASSERT(correct_cigar)
+        bool correct_affine_d = check_affine_distance(text, pattern, tlen, plen,
+                                                      distance, penalties,
+                                                      cigar);
+        TEST_ASSERT(correct_affine_d)
         TEST_ASSERT(distance == correct_results[i])
     }
 
