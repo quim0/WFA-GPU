@@ -142,7 +142,7 @@ char* recover_cigar (const char* text,
 
     int k=0;
     wfa_offset_t offset = 0;
-        //printf("\n");
+    bool extending = false;
     while (curr_bt_index-- != bt_indexes) {
 
         wfa_backtrace_t backtrace = offloaded_backtraces_array[*curr_bt_index];
@@ -154,6 +154,49 @@ char* recover_cigar (const char* text,
         int steps = OPS_PER_BT_WORD - ((__builtin_clz(backtrace_val) - 16) / 2);
 
         for (int d=0; d<steps; d++) {
+            if (!extending) {
+                wfa_offset_t acc = extend_wavefront(offset, k, pattern, plen, text, tlen);
+                for (int j=0; j<acc; j++) {
+                    *cigar_ptr = 'M';
+                    cigar_ptr++;
+                }
+
+                offset += acc;
+            }
+
+            affine_op_t op = (affine_op_t)((backtrace_val >> ((steps - d - 1) * 2)) & 3);
+
+            switch (op) {
+                // k + 1
+                case OP_DEL:
+                    *cigar_ptr = 'D';
+                    extending = true;
+                    k--;
+                    cigar_ptr++;
+                    break;
+                // k
+                case OP_SUB:
+                    if (extending) {
+                        extending = false;
+                    } else {
+                        *cigar_ptr = 'X';
+                        offset++;
+                        cigar_ptr++;
+                    }
+                    break;
+                // k - 1
+                case OP_INS:
+                    *cigar_ptr = 'I';
+                    extending = true;
+                    k++;
+                    offset++;
+                    cigar_ptr++;
+                    break;
+            }
+        }
+
+        if (!extending) {
+            // Last exension
             wfa_offset_t acc = extend_wavefront(offset, k, pattern, plen, text, tlen);
             for (int j=0; j<acc; j++) {
                 *cigar_ptr = 'M';
@@ -161,43 +204,8 @@ char* recover_cigar (const char* text,
             }
 
             offset += acc;
-
-            affine_op_t op = (affine_op_t)((backtrace_val >> ((steps - d - 1) * 2)) & 3);
-
-            switch (op) {
-                // k + 1
-                case OP_DEL:
-                    //printf("D");
-                    *cigar_ptr = 'D';
-                    k--;
-                    break;
-                // k
-                case OP_SUB:
-                    //printf("X");
-                    *cigar_ptr = 'X';
-                    offset++;
-                    break;
-                // k - 1
-                case OP_INS:
-                    //printf("I");
-                    *cigar_ptr = 'I';
-                    k++;
-                    offset++;
-                    break;
-            }
-            cigar_ptr++;
         }
 
-        // Last exension
-        wfa_offset_t acc = extend_wavefront(offset, k, pattern, plen, text, tlen);
-        for (int j=0; j<acc; j++) {
-            *cigar_ptr = 'M';
-            cigar_ptr++;
-        }
-
-        offset += acc;
-
-        //printf("   (0x%hx)\n", backtrace_val);
     }
 
     // Final round with last backtrace
@@ -207,46 +215,54 @@ char* recover_cigar (const char* text,
     int steps = OPS_PER_BT_WORD - ((__builtin_clz(backtrace_val) - 16) / 2);
 
     for (int d=0; d<steps; d++) {
-        wfa_offset_t acc = extend_wavefront(offset, k, pattern, plen, text, tlen);
-        for (int j=0; j<acc; j++) {
-            *cigar_ptr = 'M';
-            cigar_ptr++;
-        }
+        if (!extending) {
+            wfa_offset_t acc = extend_wavefront(offset, k, pattern, plen, text, tlen);
+            for (int j=0; j<acc; j++) {
+                *cigar_ptr = 'M';
+                cigar_ptr++;
+            }
 
-        offset += acc;
+            offset += acc;
+        }
 
         affine_op_t op = (affine_op_t)((backtrace_val >> ((steps - d - 1) * 2)) & 3);
 
         switch (op) {
             // k + 1
             case OP_DEL:
-                //printf("D");
                 *cigar_ptr = 'D';
+                extending = true;
                 k--;
+                cigar_ptr++;
                 break;
             // k
             case OP_SUB:
-                //printf("X");
-                *cigar_ptr = 'X';
-                offset++;
+                if (extending) {
+                    extending = false;
+                } else {
+                    *cigar_ptr = 'X';
+                    offset++;
+                    cigar_ptr++;
+                }
                 break;
             // k - 1
             case OP_INS:
-                //printf("I");
                 *cigar_ptr = 'I';
+                extending = true;
                 k++;
                 offset++;
+                cigar_ptr++;
                 break;
         }
-        cigar_ptr++;
     }
 
-    //printf("\n");
-    // Last exension
-    wfa_offset_t acc = extend_wavefront(offset, k, pattern, plen, text, tlen);
-    for (int j=0; j<acc; j++) {
-        *cigar_ptr = 'M';
-        cigar_ptr++;
+    if (!extending) {
+        // Last exension
+        wfa_offset_t acc = extend_wavefront(offset, k, pattern, plen, text, tlen);
+        for (int j=0; j<acc; j++) {
+            *cigar_ptr = 'M';
+            cigar_ptr++;
+        }
     }
 
     free(bt_indexes);
@@ -350,16 +366,9 @@ void test_one_alignment() {
 }
 
 void test_multiple_alignments_affine () {
-    // >TGTGAAGTAATGGACGTTCTATTGGTTAAGAAATGCACCAGCTACAGCAAACTATGAGTCATCCTTTTCCATGTTAAGCCTGGTTCCTAAACACTTCGTGAAGGACGAAACTTATGCACGCGTCTGCCCAACAGAAATCCTTCGTAACCG
-    // <TGTAAAGTAATGGACGTTCTATTGGTTAAGAAATGCACCAGCTACAGCCAAACTATGAGTCATCCTTTTCCATGTTAAGCCTGGTTCCTAAACACTTCGTGAAGGACGAAACTTATGCACGCGTCTGCCCAACAGAAATCCTTCGTAACCG
-    // >ACGGGCGTGCATCACAACCCGTGATGATCGCCATAGAGCGAGGGGTGGATATGGAGACCGTGTTGACGGTCTCACATATATTTGGTCTAGCACCTTCCGACATGACTTCGTCCTAATCTTACTCGTCAAAACAAAACAATGACAAGATAA
-    // <ACGGGCGTGCATCACAACCCGGATGATCGCCATAGAGCCGAGGGGTGGATATGGAGACCGTGTTGACGGTCTCACATATATTTGGTCTAGCACCTTCCGACATGACTTCGATCCTAATCTTACTCGTCAAAACAAAACAATGACAAGATAA
-    // >ATACCCCCGTCTTATCATACGACCCTAATGCACGCGTTAGGGCGGCTTAAATCCCTCCTATCCCTGATGCCATTTGATGATGAAACTCGTGGCTAAGAAACGCCCAACTGGTCGTCTTTGTCCACCCTGGAAACGCGGGCACCCTCTTAG
-    // <ATCCCACGTCTTATCATACGACCCTAATGCACGCGTTAGGGCGGCTTAAATCCCTCCTATCCCTGATGCCATTTGATGTGAAACTCGTGGCTAAGAAACGCCCAACTGGTCGTCTTTGTCCACCCTGGAAACGCGGGCACCCTCTTAG
-
-    size_t seq_buf_size = 4096;
+    size_t seq_buf_size = 6144;
     char* sequence_unpacked = (char*)calloc(seq_buf_size, 1);
-    sequence_pair_t* sequence_metadata = (sequence_pair_t*)calloc(3, sizeof(sequence_pair_t));
+    sequence_pair_t* sequence_metadata = (sequence_pair_t*)calloc(4, sizeof(sequence_pair_t));
     if (!sequence_unpacked || !sequence_metadata) {
         LOG_ERROR("Can not allocate memory");
         exit(-1);
@@ -391,7 +400,17 @@ void test_multiple_alignments_affine () {
     sequence_metadata[2].text_len = 8;
     strcpy(sequence_unpacked + sequence_metadata[2].text_offset,
     "TTTTAAAA");
-    size_t num_alignments = 3;
+
+    sequence_metadata[3].pattern_offset = 1632;
+    sequence_metadata[3].pattern_len = 300;
+    strcpy(sequence_unpacked + sequence_metadata[3].pattern_offset,
+    "TACAAATGTACACGGCAATGAGCTATCCAACAATAATTTTACAGTTTTTGGAATACGGTTGATGTTTTTGGAAGGTCCTCACGCAGTTAGGGTGCGCCGCAAGATCTCTTGAAACATAATTGGGAACGGTAGTTGTAGAACGAGTGGGGGGGCCAGGCAAACGAACTCAACCGCTGTGCGCAAGGAAAGCATGTTTATAATCGGTCCGATCCTCACGCCCTGAGCACCTGGTTAGTGACGTGAGACATGGACCATGACAATGATGTGCTATGTACTCGTTATCCACACGACGTGCGCTTC");
+
+    sequence_metadata[3].text_offset = 1936;
+    sequence_metadata[3].text_len = 301;
+    strcpy(sequence_unpacked + sequence_metadata[3].text_offset,
+    "TACAAATGTACACGGCAATGAGCTATCCAACAATAATTTTACAGTTTTTGGAATATCGGTTGATGTTTTTGGAGTGTCCTCACGCAGTTAGGGTGCGCCGCAAGATCTCTTGAAACATAGTTGGGAACGGTAGTTGTAGACGAGGGGGGGGCCAGGCAAACGATCTCACCGCGTGCGCAAGGAAAGCATGGTTTATAATCGGTCCCGATCCTCACGCCCTGAGCACCTGTTAGTGACGTTGAGATCATGGACCATGACAATGATGTGCTACTGTACTCGTTATCCACACGACGTGCGCTTC");
+    size_t num_alignments = 4;
 
     char* d_seq_buf_unpacked = NULL;
     char* d_seq_buf_packed = NULL;
@@ -444,7 +463,7 @@ void test_multiple_alignments_affine () {
 
     cudaDeviceSynchronize();
 
-    const int correct_results[3] = {6, 12, 8};
+    const int correct_results[4] = {6, 12, 8, 52};
     for (int i=0; i<num_alignments; i++) {
         // TODO
         char* text = &sequence_unpacked[sequence_metadata[i].text_offset];
@@ -455,8 +474,6 @@ void test_multiple_alignments_affine () {
         char* cigar = recover_cigar(text, pattern, tlen,
                                     plen,results[i].backtrace,
                                     backtraces + backtraces_offloaded_elements*i);
-
-        if (i == 2) printf("I: %d, score: %d, cigar: %s\n", i, distance, cigar);
 
         bool correct = check_cigar_edit(text, pattern, tlen, plen, cigar);
         TEST_ASSERT(correct)
@@ -543,7 +560,6 @@ void test_multiple_alignments_edit () {
 
     cudaDeviceSynchronize();
 
-    //affine_penalties_t penalties = {.x = 2, .o = 3, .e = 1};
     affine_penalties_t penalties = {.x = 1, .o = 0, .e = 1};
     alignment_result_t* results = (alignment_result_t*)calloc(num_alignments,
                                                               sizeof(alignment_result_t));

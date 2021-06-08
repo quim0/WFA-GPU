@@ -347,7 +347,7 @@ __device__ void next_MDI (wfa_wavefront_t* M_wavefronts,
         // ~M update
         const wfa_offset_t X_offset = prev_wf_x->offsets[k] + 1;
         const wfa_backtrace_t X_backtrace = prev_wf_x->backtraces[k];
-        const uint16_t X_backtrace_value = (X_backtrace.backtrace << 2) | OP_SUB;
+        const uint16_t X_backtrace_value = X_backtrace.backtrace;
         const int64_t X_offset_pb = (int64_t)
                                      (((uint64_t)X_offset << 32)
                                      | ((uint32_t)X_backtrace_value << 16)
@@ -360,13 +360,15 @@ __device__ void next_MDI (wfa_wavefront_t* M_wavefronts,
 
         const wfa_backtrace_packed_t M_backtrace_packed = (wfa_backtrace_packed_t)
                                             (M_offset_pb & 0xffffffff);
-        const uint16_t M_backtrace_value = (uint16_t)(M_backtrace_packed >> 16);
+        uint16_t M_backtrace_value = (uint16_t)(M_backtrace_packed >> 16);
         const uint16_t M_backtrace_prev = (uint16_t)(M_backtrace_packed & 0xffff);
 
         wfa_offset_t M_offset = (wfa_offset_t)(M_offset_pb >> 32);
         M_offset = WF_extend_kernel(text, pattern, tlen, plen, k, M_offset);
 
         M_wavefronts[curr_wf].offsets[k] = M_offset;
+
+        M_backtrace_value = (M_backtrace_value << 2) | OP_SUB;
 
         wfa_backtrace_t M_backtrace = {.backtrace = M_backtrace_value,
                                        .prev = M_backtrace_prev};
@@ -647,7 +649,6 @@ __global__ void alignment_kernel (
     }
 
     if  (tid == 0) {
-        if (x == 2 && blockIdx.x == 2) printf("d: %d, steps: %d\n", distance, steps);
         results[blockIdx.x].distance = distance;
         results[blockIdx.x].backtrace = M_wavefronts[curr_wf].backtraces[target_k];
     }
