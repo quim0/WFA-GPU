@@ -41,7 +41,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
     cudaMalloc(&results_d, num_alignments * sizeof(alignment_result_t));
     CUDA_CHECK_ERR
 
-    const int max_steps = 256;
+    const int max_steps = 128;
 
     // TODO: Free backtraces_offloaded_d
     wfa_backtrace_t *bt_offloaded_d;

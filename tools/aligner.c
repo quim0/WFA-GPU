@@ -23,6 +23,7 @@
 #include "utils/wf_clock.h"
 #include "utils/arg_handler.h"
 #include "utils/sequence_reader.h"
+#include "affine_penalties.h"
 #include "batch_async.cuh"
 
 #include <stdbool.h>
@@ -31,7 +32,7 @@
 #include <errno.h>
 #include <string.h>
 
-#define NUM_ARGUMENTS 2
+#define NUM_ARGUMENTS 3
 
 int main(int argc, char** argv) {
 
@@ -50,6 +51,13 @@ int main(int argc, char** argv) {
          .long_arg = "num-alignments",
          .required = false,
          .type = ARG_INT
+         },
+        {.name = "Affine penalties",
+         .description = "Gap-affine penalties for the alignment, in format x,o,e",
+         .short_arg = 'g',
+         .long_arg = "affine-penalties",
+         .required = true,
+         .type = ARG_STR
          },
     };
 
@@ -70,6 +78,15 @@ int main(int argc, char** argv) {
         sequences_read = options.options[1].value.int_val * 2;
     }
 
+    affine_penalties_t penalties = {0};
+    // TODO: This is insecure but works for now, parse it better
+    int x, o, e;
+    sscanf(options.options[2].value.str_val, "%d,%d,%d", &x, &o, &e);
+
+    penalties.x = x;
+    penalties.o = o;
+    penalties.e = e;
+
     DEBUG_CLOCK_INIT()
     DEBUG_CLOCK_START()
 
@@ -87,7 +104,8 @@ int main(int argc, char** argv) {
         sequence_reader.sequences_buffer,
         sequence_reader.sequences_buffer_size,
         sequence_reader.sequences_metadata,
-        sequence_reader.num_sequences_read / 2
+        sequence_reader.num_sequences_read / 2,
+        penalties
     );
 
     CLOCK_STOP("Alignment computed")

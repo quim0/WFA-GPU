@@ -22,12 +22,14 @@
 #include "batch_async.cuh"
 #include "sequence_packing.cuh"
 #include "sequence_alignment.cuh"
+#include "affine_penalties.h"
 // TODO: launch_batched_alignments (num_aligns, num_batches, num_steams... etc)
 
 extern "C" void launch_batch_async (const char* sequences_buffer,
                          const size_t sequences_buffer_size,
                          sequence_pair_t* sequences_metadata,
-                         const size_t num_alignments) {
+                         const size_t num_alignments,
+                         const affine_penalties_t penalties) {
     // TODO: Make this stream reusable instead of creating a new one per batch
     cudaStream_t stream;
     cudaStreamCreate(&stream);
@@ -61,8 +63,7 @@ extern "C" void launch_batch_async (const char* sequences_buffer,
 
 
     // Alignment
-    // TODO: This is not async for now, take this from args
-    affine_penalties_t penalties = {.x = 1, .o = 0, .e = 1};
+    // TODO: This is not async for now
 
     // TODO: Get resultst and backtraces from function parameters
     alignment_result_t* results = (alignment_result_t*)calloc(num_alignments, sizeof(alignment_result_t));

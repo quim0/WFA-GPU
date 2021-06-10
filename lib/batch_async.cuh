@@ -23,10 +23,12 @@
 #define BATCH_ASYNC_CUH
 
 #include "utils/sequences.h"
+#include "affine_penalties.h"
 
 void launch_batch_async (const char* sequences_buffer,
                          const size_t sequences_buffer_size,
                          const sequence_pair_t* sequences_metadata,
-                         const size_t num_alignments);
+                         const size_t num_alignments,
+                         const affine_penalties_t penalties);
 
 #endif
