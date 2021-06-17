@@ -33,7 +33,7 @@
 #define EWAVEFRONT_V(k,offset) ((offset)-(k))
 #define EWAVEFRONT_H(k,offset) (offset)
 
-#define OPS_PER_BT_WORD 8
+#define OPS_PER_BT_WORD 16
 
 SET_TEST_NAME("ALIGNMENT KERNEL")
 
@@ -188,10 +188,10 @@ char* recover_cigar (const char* text,
     // TODO: Reverse linked list instead of doing this
     // Max possible distance / 4 as there are 4 ops per byte
     const int max_words = (tlen + plen) / 4;
-    uint16_t* bt_indexes = (uint16_t*)calloc(max_words, sizeof(uint16_t));
+    uint32_t* bt_indexes = (uint32_t*)calloc(max_words, sizeof(uint32_t));
 
     wfa_backtrace_t curr_bt = final_backtrace;
-    uint16_t* curr_bt_index = bt_indexes;
+    uint32_t* curr_bt_index = bt_indexes;
     while (curr_bt.prev != 0) {
         *curr_bt_index++ = curr_bt.prev;
         curr_bt = offloaded_backtraces_array[curr_bt.prev];
@@ -203,12 +203,9 @@ char* recover_cigar (const char* text,
     while (curr_bt_index-- != bt_indexes) {
 
         wfa_backtrace_t backtrace = offloaded_backtraces_array[*curr_bt_index];
-        uint16_t backtrace_val = backtrace.backtrace;
+        uint32_t backtrace_val = backtrace.backtrace;
 
-        // Substract 16 to builtin_clz because the function gets a 32 bits
-        // value, and we pass a 16 bit value (that gets automatically converted
-        // to 32 bit)
-        int steps = OPS_PER_BT_WORD - ((__builtin_clz(backtrace_val) - 16) / 2);
+        int steps = OPS_PER_BT_WORD - (__builtin_clz(backtrace_val) / 2);
 
         for (int d=0; d<steps; d++) {
             if (!extending) {
@@ -267,9 +264,9 @@ char* recover_cigar (const char* text,
 
     // Final round with last backtrace
     wfa_backtrace_t backtrace = final_backtrace;
-    uint16_t backtrace_val = backtrace.backtrace;
+    uint32_t backtrace_val = backtrace.backtrace;
 
-    int steps = OPS_PER_BT_WORD - ((__builtin_clz(backtrace_val) - 16) / 2);
+    int steps = OPS_PER_BT_WORD - (__builtin_clz(backtrace_val) / 2);
 
     for (int d=0; d<steps; d++) {
         if (!extending) {
@@ -380,7 +377,7 @@ void test_one_alignment() {
 
     // TODO: Move max steps outside launch_alignments_async function
     wfa_backtrace_t* backtraces = (wfa_backtrace_t*)calloc(
-                                                    BT_OFFLOADED_ELEMENTS(256),
+                                                    BT_OFFLOADED_ELEMENTS(MAX_STEPS),
                                                     sizeof(wfa_backtrace_t)
                                                     );
 
@@ -503,7 +500,7 @@ void test_multiple_alignments_affine () {
                                                               sizeof(alignment_result_t));
 
     // TODO: Move max steps outside launch_alignments_async function
-    uint32_t backtraces_offloaded_elements = BT_OFFLOADED_ELEMENTS(256);
+    uint32_t backtraces_offloaded_elements = BT_OFFLOADED_ELEMENTS(MAX_STEPS);
     wfa_backtrace_t* backtraces = (wfa_backtrace_t*)calloc(
                                                     backtraces_offloaded_elements * num_alignments,
                                                     sizeof(wfa_backtrace_t)
@@ -522,7 +519,6 @@ void test_multiple_alignments_affine () {
 
     const int correct_results[4] = {6, 12, 8, 52};
     for (int i=0; i<num_alignments; i++) {
-        // TODO
         char* text = &sequence_unpacked[sequence_metadata[i].text_offset];
         char* pattern = &sequence_unpacked[sequence_metadata[i].pattern_offset];
         size_t tlen = sequence_metadata[i].text_len;
@@ -626,7 +622,7 @@ void test_multiple_alignments_edit () {
                                                               sizeof(alignment_result_t));
 
     // TODO: Move max steps outside launch_alignments_async function
-    uint32_t backtraces_offloaded_elements = BT_OFFLOADED_ELEMENTS(256);
+    uint32_t backtraces_offloaded_elements = BT_OFFLOADED_ELEMENTS(MAX_STEPS);
     wfa_backtrace_t* backtraces = (wfa_backtrace_t*)calloc(
                                                     backtraces_offloaded_elements * num_alignments,
                                                     sizeof(wfa_backtrace_t)

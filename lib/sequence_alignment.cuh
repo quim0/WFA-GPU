@@ -25,12 +25,6 @@
 #include "affine_penalties.h"
 #include "alignment_results.h"
 
-
-// Height * width
-#define BT_OFFLOADED_ELEMENTS(max_steps) \
-                        ((max_steps) * 2 + 1) \
-                        * ((max_steps) * 2 / 8)
-
 void launch_alignments_async (const char* packed_sequences_buffer,
                               const sequence_pair_t* sequences_metadata,
                               const size_t num_alignments,

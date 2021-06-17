@@ -20,15 +20,10 @@
  */
 
 #include "kernels/sequence_alignment_kernel.cuh"
+#include "wfa_types.h"
 #include "utils/cuda_utils.cuh"
 #include "utils/logger.h"
 #include "sequence_alignment.cuh"
-
-// TODO: Why it does not detect the macro in the header file ? this should be
-//       removed.
-#define BT_OFFLOADED_ELEMENTS(max_steps) \
-                        ((max_steps) * 2 + 1) \
-                        * ((max_steps) * 2 / 8)
 
 void launch_alignments_async (const char* packed_sequences_buffer,
                               const sequence_pair_t* sequences_metadata,
@@ -41,13 +36,11 @@ void launch_alignments_async (const char* packed_sequences_buffer,
     cudaMalloc(&results_d, num_alignments * sizeof(alignment_result_t));
     CUDA_CHECK_ERR
 
-    const int max_steps = 128;
-
     // TODO: Free backtraces_offloaded_d
     wfa_backtrace_t *bt_offloaded_d;
-    size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(max_steps);
+    size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(MAX_STEPS);
 
-    if (bt_offloaded_size >= (1<<16)) {
+    if (bt_offloaded_size >= (1L<<32)) {
         LOG_ERROR("Trying to allocate more backtrace elements than the ones"
                   " that we can address")
         exit(-1);
@@ -64,7 +57,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
     CUDA_CHECK_ERR
 
     // TODO: Reduction of penalties
-    const int max_wf_size = 2 * max_steps + 1;
+    const int max_wf_size = 2 * MAX_STEPS + 1;
     const int active_working_set = max(penalties.o+penalties.e, penalties.x) + 1;
     int offsets_elements = active_working_set * max_wf_size;
     offsets_elements = offsets_elements + (4 - (offsets_elements % 4));
@@ -95,7 +88,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                                               packed_sequences_buffer,
                                               sequences_metadata,
                                               num_alignments,
-                                              max_steps,
+                                              MAX_STEPS,
                                               penalties,
                                               bt_offloaded_d,
                                               results_d);

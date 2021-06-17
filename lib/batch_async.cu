@@ -23,6 +23,7 @@
 #include "sequence_packing.cuh"
 #include "sequence_alignment.cuh"
 #include "affine_penalties.h"
+#include "wfa_types.h"
 // TODO: launch_batched_alignments (num_aligns, num_batches, num_steams... etc)
 
 extern "C" void launch_batch_async (const char* sequences_buffer,
@@ -68,7 +69,7 @@ extern "C" void launch_batch_async (const char* sequences_buffer,
     // TODO: Get resultst and backtraces from function parameters
     alignment_result_t* results = (alignment_result_t*)calloc(num_alignments, sizeof(alignment_result_t));
     wfa_backtrace_t* backtraces = (wfa_backtrace_t*)calloc(
-                                                    BT_OFFLOADED_ELEMENTS(256) * num_alignments,
+                                                    BT_OFFLOADED_ELEMENTS(MAX_STEPS) * num_alignments,
                                                     sizeof(wfa_backtrace_t)
                                                     );
 

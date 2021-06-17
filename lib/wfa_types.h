@@ -30,9 +30,9 @@ typedef int16_t wfa_offset_t;
 //       backtrace        last_bt_offset
 typedef uint32_t wfa_backtrace_packed_t;
 
-typedef struct __align__(4) {
-    uint16_t backtrace;
-    uint16_t prev;
+typedef struct __align__(8) {
+    uint32_t backtrace;
+    uint32_t prev;
 } wfa_backtrace_t;
 
 typedef enum {
@@ -40,5 +40,22 @@ typedef enum {
     OP_SUB = 2,
     OP_DEL = 3
 } affine_op_t;
+
+typedef enum {
+    GAP_OPEN = 1,
+    GAP_EXTEND
+} gap_op_t;
+
+typedef struct {
+    int len;
+    char* buffer;
+} wfa_cigar_t;
+
+#define MAX_STEPS 128
+
+// Height * width
+#define BT_OFFLOADED_ELEMENTS(max_steps) \
+                        ((max_steps) * 2 + 1) \
+                        * ((max_steps) * 2 / 16)
 
 #endif
