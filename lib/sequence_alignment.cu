@@ -48,8 +48,8 @@ void launch_alignments_async (const char* packed_sequences_buffer,
 
     bt_offloaded_size *= num_alignments;
 
-    LOG_DEBUG("Allocating %zu MiB to store backtraces of %zu alignments.",
-              (bt_offloaded_size * sizeof(wfa_backtrace_t)) / (1 << 20),
+    LOG_DEBUG("Allocating %f MiB to store backtraces of %zu alignments.",
+              (float)(bt_offloaded_size * sizeof(wfa_backtrace_t)) / (1 << 20),
               num_alignments)
 
     cudaMalloc(&bt_offloaded_d,
@@ -63,11 +63,22 @@ void launch_alignments_async (const char* packed_sequences_buffer,
     offsets_elements = offsets_elements + (4 - (offsets_elements % 4));
     const int bt_elements = offsets_elements;
 
-    size_t sh_mem_size = \
+    // Create the active working set buffer on global memory
+    // TODO: Move this allocations outside
+    uint8_t *wf_data_buffer;
+    size_t wf_data_buffer_size =
                     // Offsets space
                     (offsets_elements * 3 * sizeof(wfa_offset_t))
                     // Backtraces space
-                    + (bt_elements * 3 * sizeof(wfa_backtrace_t))
+                    + (bt_elements * 3 * sizeof(wfa_backtrace_t));
+    wf_data_buffer_size *= num_alignments;
+
+    LOG_DEBUG("Allocating %f MiB to store working set data of %zu alignments.",
+              (float)(wf_data_buffer_size) / (1 << 20), num_alignments)
+    cudaMalloc(&wf_data_buffer, wf_data_buffer_size);
+    CUDA_CHECK_ERR;
+
+    size_t sh_mem_size = \
                     // Wavefronts structs space
                     + (active_working_set * sizeof(wfa_wavefront_t) * 3)
                     // Position of the last used element in the offloaded
@@ -76,7 +87,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
 
     // TODO
     dim3 gridSize(num_alignments);
-    dim3 blockSize(32);
+    dim3 blockSize(64);
 
     LOG_DEBUG("Launching %d blocks of %d threads with %.2fKiB of shared memory",
               gridSize.x, blockSize.x, (float(sh_mem_size) / (2 << 10)));
@@ -89,6 +100,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                                               sequences_metadata,
                                               num_alignments,
                                               MAX_STEPS,
+                                              wf_data_buffer,
                                               penalties,
                                               bt_offloaded_d,
                                               results_d);

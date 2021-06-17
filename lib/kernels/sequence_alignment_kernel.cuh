@@ -42,6 +42,7 @@ __global__ void alignment_kernel (
                             const sequence_pair_t* sequences_metadata,
                             const size_t num_alignments,
                             const int max_steps,
+                            uint8_t* const wf_data_buffer,
                             const affine_penalties_t penalties,
                             wfa_backtrace_t* offloaded_backtraces_global,
                             alignment_result_t* results);

@@ -26,10 +26,6 @@
 
 typedef int16_t wfa_offset_t;
 
-// 31 --------------- 15 ---------------- 0
-//       backtrace        last_bt_offset
-typedef uint32_t wfa_backtrace_packed_t;
-
 typedef struct __align__(8) {
     uint32_t backtrace;
     uint32_t prev;

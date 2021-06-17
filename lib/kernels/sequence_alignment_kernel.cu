@@ -424,6 +424,7 @@ __global__ void alignment_kernel (
                             const sequence_pair_t* sequences_metadata,
                             const size_t num_alignments,
                             const int max_steps,
+                            uint8_t* const wf_data_buffer,
                             const affine_penalties_t penalties,
                             wfa_backtrace_t* offloaded_backtraces_global,
                             alignment_result_t* results) {
@@ -463,7 +464,16 @@ __global__ void alignment_kernel (
     int bt_size = active_working_set_size * max_wf_size;
     bt_size = bt_size + (4 - (bt_size % 4));
 
-    wfa_offset_t* M_base = (wfa_offset_t*)sh_mem;
+
+    const size_t wf_data_buffer_size =
+                    // Offsets space
+                    (offsets_size * 3 * sizeof(wfa_offset_t))
+                    // Backtraces space
+                    + (bt_size * 3 * sizeof(wfa_backtrace_t));
+    uint8_t* curr_alignment_wf_data_buffer = wf_data_buffer
+                                             + (wf_data_buffer_size * blockIdx.x);
+
+    wfa_offset_t* M_base = (wfa_offset_t*)curr_alignment_wf_data_buffer;
     wfa_offset_t* I_base = M_base + offsets_size;
     wfa_offset_t* D_base = I_base + offsets_size;
 
@@ -471,7 +481,8 @@ __global__ void alignment_kernel (
     wfa_backtrace_t* I_bt_base = M_bt_base + bt_size;
     wfa_backtrace_t* D_bt_base = I_bt_base + bt_size;
 
-    wfa_wavefront_t* M_wavefronts = (wfa_wavefront_t*)(D_bt_base + bt_size);
+    // Wavefronts structres reside in shared
+    wfa_wavefront_t* M_wavefronts = (wfa_wavefront_t*)sh_mem;
     wfa_wavefront_t* I_wavefronts = (M_wavefronts + active_working_set_size);
     wfa_wavefront_t* D_wavefronts = (I_wavefronts + active_working_set_size);
 
