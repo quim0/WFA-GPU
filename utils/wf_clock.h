@@ -32,7 +32,7 @@
     clock_gettime(CLOCK_REALTIME, &wf_clock_now); \
     wf_clock_seconds = (double)((wf_clock_now.tv_sec+wf_clock_now.tv_nsec*1e-9) - \
                        (double)(wf_clock_tmstart.tv_sec+wf_clock_tmstart.tv_nsec*1e-9)); \
-    printf("%s: Wall time %fs", text, wf_clock_seconds);
+    printf("%s: Wall time %fs\n", text, wf_clock_seconds);
 
 #ifdef DEBUG
 

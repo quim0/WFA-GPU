@@ -24,9 +24,9 @@
 
 #include "stdint.h"
 
-typedef int16_t wfa_offset_t;
+typedef int32_t wfa_offset_t;
 
-typedef struct __align__(8) {
+typedef struct {
     uint32_t backtrace;
     uint32_t prev;
 } wfa_backtrace_t;

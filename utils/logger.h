@@ -22,6 +22,8 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
+#include <stdio.h>
+
 #ifdef DEBUG
 
 #define LOG_DEBUG(...) {\

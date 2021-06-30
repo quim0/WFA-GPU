@@ -24,6 +24,7 @@
 
 #include "affine_penalties.h"
 #include "alignment_results.h"
+#include "utils/sequences.h"
 
 void launch_alignments_async (const char* packed_sequences_buffer,
                               const sequence_pair_t* sequences_metadata,

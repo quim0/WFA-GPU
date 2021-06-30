@@ -23,7 +23,6 @@
 #define ALIGNMENT_RESULTS_H
 
 #include "wfa_types.h"
-#include "sequence_alignment.cuh"
 
 typedef struct {
     int distance;

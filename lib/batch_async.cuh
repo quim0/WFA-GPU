@@ -24,11 +24,15 @@
 
 #include "utils/sequences.h"
 #include "affine_penalties.h"
+#include "alignment_results.h"
+#include "wfa_types.h"
 
 void launch_batch_async (const char* sequences_buffer,
                          const size_t sequences_buffer_size,
                          const sequence_pair_t* sequences_metadata,
                          const size_t num_alignments,
-                         const affine_penalties_t penalties);
+                         const affine_penalties_t penalties,
+                         alignment_result_t* results,
+                         wfa_backtrace_t* backtraces);
 
 #endif

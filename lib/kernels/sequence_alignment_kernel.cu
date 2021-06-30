@@ -464,7 +464,6 @@ __global__ void alignment_kernel (
     int bt_size = active_working_set_size * max_wf_size;
     bt_size = bt_size + (4 - (bt_size % 4));
 
-
     const size_t wf_data_buffer_size =
                     // Offsets space
                     (offsets_size * 3 * sizeof(wfa_offset_t))
