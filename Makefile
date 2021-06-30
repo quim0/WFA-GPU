@@ -30,10 +30,10 @@ tests: test-packing test-alignment
 	mkdir -p bin
 	mv $^ bin/
 
-test-packing: tests/test_packing_kernel.cu wfa-gpu-debug-so
+test-packing: tests/test_packing_kernel.cu wfa-gpu-so
 	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS_ALIGNER) utils/verification.c $< -lwfagpu -o $@
 
-test-alignment: tests/test_alignment_kernel.cu wfa-gpu-debug-so
+test-alignment: tests/test_alignment_kernel.cu wfa-gpu-so
 	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS_ALIGNER) $< utils/verification.c -lwfagpu -o $@
 
 wfa-gpu-so: $(SRC_LIB)
