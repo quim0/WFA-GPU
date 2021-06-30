@@ -32,48 +32,6 @@
 #define BT_WORD_FULL_CMP 0x40000000
 #define BT_IS_FULL(bt_word) ((bt_word) >= BT_WORD_FULL_CMP)
 
-#ifdef DEBUG
-
-#define PPRINT_WFS(aws, wfs, d, title) pprint_wavefronts(aws, wfs, d, title)
-__device__ void pprint_wavefronts (const int active_working_set_size,
-                                   wfa_wavefront_t* wavefronts,
-                                   const int distance,
-                                   char* title) {
-    if (threadIdx.x == 0) {
-        if (!title) title = (char*)("");
-
-        printf("%s (distance: %d)\n", title, distance);
-
-        //const int wf_padding_len = 14;
-
-        // Header (WF number)
-        for (int i=0; i<active_working_set_size; i++) {
-            const int curr_n = i - (active_working_set_size - 1);
-            printf("| %.2d          ", curr_n);
-        }
-        printf(" |\n");
-
-        // exist
-        for (int i=0; i<active_working_set_size; i++) {
-            printf("| exist: %d     ", wavefronts[i].exist);
-        }
-        printf("|\n");
-
-        for (int i=0; i<active_working_set_size; i++) {
-            printf("| hi=%.2d, lo=%.2d", wavefronts[i].hi, wavefronts[i].lo);
-        }
-        printf("|\n");
-    }
-    __syncthreads();
-}
-
-#else // DEBUG
-
-#define PPRINT_WFS(aws, wfs, d, title) pprint_wavefronts(aws, wfs, d, title)
-
-#endif // DEBUG
-
-
 __device__ wfa_offset_t WF_extend_kernel (const char* text,
                                   const char* pattern,
                                   const int tlen,
@@ -612,23 +570,6 @@ __global__ void alignment_kernel (
 
                 distance++;
             }
-
-#if 0
-// DEVELOPING HELP ONLY
-            PPRINT_WFS(active_working_set_size,
-                       M_wavefronts,
-                       distance,
-                       (char*)("~M wavefronts"));
-            PPRINT_WFS(active_working_set_size,
-                       I_wavefronts,
-                       distance,
-                       (char*)("~I wavefronts"));
-            PPRINT_WFS(active_working_set_size,
-                       D_wavefronts,
-                       distance,
-                       (char*)("~D wavefronts"));
-            if (tid == 0) printf("---------------------------------------------\n");
-#endif
 
         update_curr_wf(
             M_wavefronts,
