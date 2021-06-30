@@ -2,7 +2,7 @@ CC=gcc
 NVCC=nvcc
 SRC_PATH=lib
 BUILD_PATH=build
-SRC_ALIGNER=tools/aligner.c utils/arg_handler.c utils/sequence_reader.c
+SRC_ALIGNER=tools/aligner.c utils/arg_handler.c utils/sequence_reader.c utils/verification.c
 SRC_LIB=$(wildcard $(SRC_PATH)/kernels/*cu) $(wildcard $(SRC_PATH)/*.cu)
 SRC_TEST=$(wildcard tests/test_*.cu)
 ARGS=-I . -Ilib/
@@ -31,10 +31,10 @@ tests: test-packing test-alignment
 	mv $^ bin/
 
 test-packing: tests/test_packing_kernel.cu wfa-gpu-debug-so
-	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS_ALIGNER) $< -lwfagpu -o $@
+	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS_ALIGNER) utils/verification.c $< -lwfagpu -o $@
 
 test-alignment: tests/test_alignment_kernel.cu wfa-gpu-debug-so
-	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS_ALIGNER) $< -lwfagpu -o $@
+	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS_ALIGNER) $< utils/verification.c -lwfagpu -o $@
 
 wfa-gpu-so: $(SRC_LIB)
 	mkdir -p build

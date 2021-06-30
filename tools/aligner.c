@@ -23,7 +23,10 @@
 #include "utils/wf_clock.h"
 #include "utils/arg_handler.h"
 #include "utils/sequence_reader.h"
+#include "utils/verification.h"
 #include "affine_penalties.h"
+#include "alignment_results.h"
+#include "wfa_types.h"
 #include "batch_async.cuh"
 
 #include <stdbool.h>
@@ -32,7 +35,7 @@
 #include <errno.h>
 #include <string.h>
 
-#define NUM_ARGUMENTS 3
+#define NUM_ARGUMENTS 4
 
 int main(int argc, char** argv) {
 
@@ -59,6 +62,13 @@ int main(int argc, char** argv) {
          .required = true,
          .type = ARG_STR
          },
+        {.name = "Check",
+         .description = "Check for alignment correctness",
+         .short_arg = 'c',
+         .long_arg = "check",
+         .required = false,
+         .type = ARG_NO_VALUE
+         },
     };
 
     options_t options = {options_arr, NUM_ARGUMENTS};
@@ -78,6 +88,8 @@ int main(int argc, char** argv) {
         sequences_read = options.options[1].value.int_val * 2;
     }
 
+    bool check = options.options[3].parsed;
+
     affine_penalties_t penalties = {0};
     // TODO: This is insecure but works for now, parse it better
     int x, o, e;
@@ -86,6 +98,8 @@ int main(int argc, char** argv) {
     penalties.x = x;
     penalties.o = o;
     penalties.e = e;
+
+    LOG_DEBUG("Penalties: M=0, X=%d, O=%d, E=%d", penalties.x, penalties.o, penalties.e)
 
     DEBUG_CLOCK_INIT()
     DEBUG_CLOCK_START()
@@ -100,13 +114,67 @@ int main(int argc, char** argv) {
     CLOCK_INIT()
     CLOCK_START()
 
+    size_t num_alignments = sequence_reader.num_sequences_read / 2;
+    alignment_result_t* results = (alignment_result_t*)calloc(num_alignments, sizeof(alignment_result_t));
+    uint32_t backtraces_offloaded_elements = BT_OFFLOADED_ELEMENTS(MAX_STEPS);
+    wfa_backtrace_t* backtraces = (wfa_backtrace_t*)calloc(
+                                                    backtraces_offloaded_elements * num_alignments,
+                                                    sizeof(wfa_backtrace_t)
+                                                    );
+
     launch_batch_async(
         sequence_reader.sequences_buffer,
         sequence_reader.sequences_buffer_size,
         sequence_reader.sequences_metadata,
-        sequence_reader.num_sequences_read / 2,
-        penalties
+        num_alignments,
+        penalties,
+        results,
+        backtraces
     );
 
     CLOCK_STOP("Alignment computed")
+
+    float avg_distance = 0;
+    int correct = 0;
+    int incorrect = 0;
+
+    if (check) {
+        printf("Checking correctness...\n");
+        for (int i=0; i<num_alignments; i++) {
+            size_t toffset = sequence_reader.sequences_metadata[i].text_offset;
+            size_t poffset = sequence_reader.sequences_metadata[i].pattern_offset;
+
+            char* text = &sequence_reader.sequences_buffer[toffset];
+            char* pattern = &sequence_reader.sequences_buffer[poffset];
+
+            size_t tlen = sequence_reader.sequences_metadata[i].text_len;
+            size_t plen = sequence_reader.sequences_metadata[i].pattern_len;
+
+            int distance = results[i].distance;
+            char* cigar = recover_cigar(text, pattern, tlen,
+                                        plen,results[i].backtrace,
+                                        backtraces + backtraces_offloaded_elements*i);
+
+            bool correct_cigar = check_cigar_edit(text, pattern, tlen, plen, cigar);
+            bool correct_affine_d = check_affine_distance(text, pattern, tlen,
+                                                          plen, distance,
+                                                          penalties, cigar);
+
+            avg_distance += distance;
+
+            if (correct_cigar && correct_affine_d) {
+                correct++;
+            } else {
+                incorrect++;
+            }
+
+            free(cigar);
+        }
+
+        avg_distance /= num_alignments;
+        printf("Correct=%d Incorrect=%d Average score=%f\n", correct, incorrect, avg_distance);
+    }
+
+    free(results);
+    free(backtraces);
 }
