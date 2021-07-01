@@ -50,13 +50,20 @@ void launch_alignments_async (const char* packed_sequences_buffer,
 
     bt_offloaded_size *= num_alignments;
 
+    // Add the results array
+    size_t bt_offloaded_results_size = BT_OFFLOADED_RESULT_ELEMENTS(MAX_STEPS)
+                                       * num_alignments;
+
     LOG_DEBUG("Allocating %f MiB to store backtraces of %zu alignments.",
               (float)(bt_offloaded_size * sizeof(wfa_backtrace_t)) / (1 << 20),
               num_alignments)
 
     cudaMalloc(&bt_offloaded_d,
-               bt_offloaded_size * sizeof(wfa_backtrace_t));
+               (bt_offloaded_size + bt_offloaded_results_size) * sizeof(wfa_backtrace_t));
     CUDA_CHECK_ERR
+
+    wfa_backtrace_t* bt_offloaded_results_d = bt_offloaded_d
+                                              + bt_offloaded_size;
 
     // TODO: Reduction of penalties
     const int max_wf_size = 2 * MAX_STEPS + 1;
@@ -89,7 +96,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
 
     // TODO
     dim3 gridSize(num_alignments);
-    dim3 blockSize(512);
+    dim3 blockSize(128);
 
     LOG_DEBUG("Launching %d blocks of %d threads with %.2fKiB of shared memory",
               gridSize.x, blockSize.x, (float(sh_mem_size) / (2 << 10)));
@@ -105,6 +112,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                                               wf_data_buffer,
                                               penalties,
                                               bt_offloaded_d,
+                                              bt_offloaded_results_d,
                                               results_d);
 
     // TODO: Make this async, another function to copy the results?
@@ -115,6 +123,10 @@ void launch_alignments_async (const char* packed_sequences_buffer,
     cudaMemcpy(results, results_d, num_alignments * sizeof(alignment_result_t),
                cudaMemcpyDeviceToHost);
     CUDA_CHECK_ERR
-    cudaMemcpy(backtraces, bt_offloaded_d, bt_offloaded_size * sizeof(wfa_backtrace_t), cudaMemcpyDeviceToHost);
+    cudaMemcpy(backtraces, bt_offloaded_results_d,
+               bt_offloaded_results_size * sizeof(wfa_backtrace_t),
+               cudaMemcpyDeviceToHost);
     CUDA_CHECK_ERR
+
+    // TODO: CUDAFREE
 }

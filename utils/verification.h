@@ -54,6 +54,7 @@ char* recover_cigar (const char* text,
                      const size_t tlen,
                      const size_t plen,
                      wfa_backtrace_t final_backtrace,
-                     wfa_backtrace_t* offloaded_backtraces_array);
+                     wfa_backtrace_t* offloaded_backtraces_array,
+                     alignment_result_t result);
 
 #endif // Header guard

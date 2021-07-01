@@ -45,6 +45,7 @@ __global__ void alignment_kernel (
                             uint8_t* const wf_data_buffer,
                             const affine_penalties_t penalties,
                             wfa_backtrace_t* offloaded_backtraces_global,
+                            wfa_backtrace_t* offloaded_backtraces_results,
                             alignment_result_t* results);
 
 #define EWAVEFRONT_V(k,offset) ((offset)-(k))

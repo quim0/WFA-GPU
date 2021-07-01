@@ -28,11 +28,12 @@
 
 #define CLOCK_INIT() struct timespec wf_clock_now, wf_clock_tmstart; double wf_clock_seconds;
 #define CLOCK_START() clock_gettime(CLOCK_REALTIME, &wf_clock_tmstart);
-#define CLOCK_STOP(text) \
+#define CLOCK_STOP() \
     clock_gettime(CLOCK_REALTIME, &wf_clock_now); \
     wf_clock_seconds = (double)((wf_clock_now.tv_sec+wf_clock_now.tv_nsec*1e-9) - \
-                       (double)(wf_clock_tmstart.tv_sec+wf_clock_tmstart.tv_nsec*1e-9)); \
-    printf("%s: Wall time %fs\n", text, wf_clock_seconds);
+                       (double)(wf_clock_tmstart.tv_sec+wf_clock_tmstart.tv_nsec*1e-9));
+#define CLOCK_REPORT(text) printf("%s: Wall time %fs\n", text, wf_clock_seconds);
+#define CLOCK_SECONDS wf_clock_seconds
 
 #ifdef DEBUG
 

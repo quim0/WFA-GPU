@@ -165,6 +165,7 @@ wfa_offset_t extend_wavefront (
 
 // Backtraces lis gets reversed, and final backtrace gets updated to it points
 // to new list head
+/*
 int reverse_backtraces_list (wfa_backtrace_t* offloaded_backtraces,
                              wfa_backtrace_t* final_bactrace) {
     int prev = 0;
@@ -190,26 +191,26 @@ int reverse_backtraces_list (wfa_backtrace_t* offloaded_backtraces,
     // The offset of the new head of the backtraces list is on prev
     return prev;
 }
+*/
 
 char* recover_cigar (const char* text,
                      const char* pattern,
                      const size_t tlen,
                      const size_t plen,
                      wfa_backtrace_t final_backtrace,
-                     wfa_backtrace_t* offloaded_backtraces_array) {
+                     wfa_backtrace_t* offloaded_backtraces_array,
+                     alignment_result_t result) {
     char* cigar_ascii = (char*)calloc(tlen + plen, 1);
     char* cigar_ptr = cigar_ascii;
-
-    int head_offset = reverse_backtraces_list(offloaded_backtraces_array,
-                                              &final_backtrace);
 
     int k=0;
     wfa_offset_t offset = 0;
     bool extending = false;
 
-    wfa_backtrace_t* backtrace = &offloaded_backtraces_array[head_offset];
-    while (backtrace != NULL) {
+    int iterations = result.num_bt_blocks;
+    while (iterations > 0) {
 
+        wfa_backtrace_t* backtrace = &offloaded_backtraces_array[iterations - 1];
         uint32_t backtrace_val = backtrace->backtrace;
 
         int steps = OPS_PER_BT_WORD - (__builtin_clz(backtrace_val) / 2);
@@ -267,9 +268,7 @@ char* recover_cigar (const char* text,
             offset += acc;
         }
 
-        if (backtrace->prev != 0) {
-            backtrace = &offloaded_backtraces_array[backtrace->prev];
-        } else { backtrace = NULL; }
+        iterations--;
     }
 
     // Final round with the final backtrace word that is not in the offlaoded

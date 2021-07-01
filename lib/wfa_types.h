@@ -47,11 +47,14 @@ typedef struct {
     char* buffer;
 } wfa_cigar_t;
 
-#define MAX_STEPS 128
+#define MAX_STEPS 150
 
 // Height * width
 #define BT_OFFLOADED_ELEMENTS(max_steps) \
-                        ((max_steps) * 2 + 1) \
-                        * ((max_steps) * 2 / 16)
+                        (((max_steps) * 2 + 1) \
+                        * ((max_steps) * 2 / 16))
+
+#define BT_OFFLOADED_RESULT_ELEMENTS(max_steps) \
+                        ((max_steps) * 2 / 16)
 
 #endif

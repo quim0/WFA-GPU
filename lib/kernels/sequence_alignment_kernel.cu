@@ -385,6 +385,7 @@ __global__ void alignment_kernel (
                             uint8_t* const wf_data_buffer,
                             const affine_penalties_t penalties,
                             wfa_backtrace_t* offloaded_backtraces_global,
+                            wfa_backtrace_t* offloaded_backtraces_results,
                             alignment_result_t* results) {
     const int tid = threadIdx.x;
     // m = 0 for WFA
@@ -401,11 +402,13 @@ __global__ void alignment_kernel (
     // TODO: Move to function/macro + use in lib/sequence_alignment.cu
     size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(max_steps);
     wfa_backtrace_t* const offloaded_backtraces = \
-                 &offloaded_backtraces_global[blockIdx.x * bt_offloaded_size];
-;
+             &offloaded_backtraces_global[blockIdx.x * bt_offloaded_size];
+
+    size_t bt_results_size = BT_OFFLOADED_RESULT_ELEMENTS(max_steps);
+    wfa_backtrace_t* const offloaded_backtrace_results_base = \
+             &offloaded_backtraces_results[blockIdx.x * bt_results_size];
+
     // In shared memory:
-    // - Offsets for all the wavefronts
-    // - Backtraces for all the wavefronts
     // - Wavefronts needed to calculate current WF_s, there are 3 "pyramids" so
     //   this number of wavefront is 3 times (WF_{max(o+e, x)} --> WF_s)
     extern __shared__ char sh_mem[];
@@ -586,5 +589,18 @@ __global__ void alignment_kernel (
     if  (tid == 0) {
         results[blockIdx.x].distance = distance;
         results[blockIdx.x].backtrace = M_wavefronts[curr_wf].backtraces[target_k];
+
+        wfa_backtrace_t* curr_result = &M_wavefronts[curr_wf].backtraces[target_k];
+
+        // Save the list in reversed order
+        int i = 0;
+        while (curr_result->prev != 0) {
+            offloaded_backtrace_results_base[i] = \
+                                        offloaded_backtraces[curr_result->prev];
+            curr_result = &offloaded_backtraces[curr_result->prev];
+            i++;
+        }
+
+        results[blockIdx.x].num_bt_blocks = i;
     }
 }

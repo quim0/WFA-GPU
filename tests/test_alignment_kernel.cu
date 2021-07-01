@@ -87,7 +87,7 @@ void test_one_alignment() {
 
     // TODO: Move max steps outside launch_alignments_async function
     wfa_backtrace_t* backtraces = (wfa_backtrace_t*)calloc(
-                                                    BT_OFFLOADED_ELEMENTS(MAX_STEPS),
+                                                    BT_OFFLOADED_RESULT_ELEMENTS(MAX_STEPS),
                                                     sizeof(wfa_backtrace_t)
                                                     );
 
@@ -210,7 +210,7 @@ void test_multiple_alignments_affine () {
                                                               sizeof(alignment_result_t));
 
     // TODO: Move max steps outside launch_alignments_async function
-    uint32_t backtraces_offloaded_elements = BT_OFFLOADED_ELEMENTS(MAX_STEPS);
+    uint32_t backtraces_offloaded_elements = BT_OFFLOADED_RESULT_ELEMENTS(MAX_STEPS);
     wfa_backtrace_t* backtraces = (wfa_backtrace_t*)calloc(
                                                     backtraces_offloaded_elements * num_alignments,
                                                     sizeof(wfa_backtrace_t)
@@ -236,7 +236,8 @@ void test_multiple_alignments_affine () {
         int distance = results[i].distance;
         char* cigar = recover_cigar(text, pattern, tlen,
                                     plen,results[i].backtrace,
-                                    backtraces + backtraces_offloaded_elements*i);
+                                    backtraces + backtraces_offloaded_elements*i,
+                                    results[i]);
 
         bool correct_cigar = check_cigar_edit(text, pattern, tlen, plen, cigar);
         TEST_ASSERT(correct_cigar)
@@ -333,7 +334,7 @@ void test_multiple_alignments_edit () {
                                                               sizeof(alignment_result_t));
 
     // TODO: Move max steps outside launch_alignments_async function
-    uint32_t backtraces_offloaded_elements = BT_OFFLOADED_ELEMENTS(MAX_STEPS);
+    uint32_t backtraces_offloaded_elements = BT_OFFLOADED_RESULT_ELEMENTS(MAX_STEPS);
     wfa_backtrace_t* backtraces = (wfa_backtrace_t*)calloc(
                                                     backtraces_offloaded_elements * num_alignments,
                                                     sizeof(wfa_backtrace_t)
@@ -361,7 +362,8 @@ void test_multiple_alignments_edit () {
         int distance = results[i].distance;
         char* cigar = recover_cigar(text, pattern, tlen,
                                     plen,results[i].backtrace,
-                                    backtraces + backtraces_offloaded_elements*i);
+                                    backtraces + backtraces_offloaded_elements*i,
+                                    results[i]);
 
         bool correct = check_cigar_edit(text, pattern, tlen, plen, cigar);
         TEST_ASSERT(correct)

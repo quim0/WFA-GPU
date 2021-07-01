@@ -111,16 +111,17 @@ int main(int argc, char** argv) {
 
     DEBUG_CLOCK_STOP("File read.")
 
-    CLOCK_INIT()
-    CLOCK_START()
 
     size_t num_alignments = sequence_reader.num_sequences_read / 2;
     alignment_result_t* results = (alignment_result_t*)calloc(num_alignments, sizeof(alignment_result_t));
-    uint32_t backtraces_offloaded_elements = BT_OFFLOADED_ELEMENTS(MAX_STEPS);
+    uint32_t backtraces_offloaded_elements = BT_OFFLOADED_RESULT_ELEMENTS(MAX_STEPS);
     wfa_backtrace_t* backtraces = (wfa_backtrace_t*)calloc(
                                                     backtraces_offloaded_elements * num_alignments,
                                                     sizeof(wfa_backtrace_t)
                                                     );
+
+    CLOCK_INIT()
+    CLOCK_START()
 
     launch_batch_async(
         sequence_reader.sequences_buffer,
@@ -132,13 +133,16 @@ int main(int argc, char** argv) {
         backtraces
     );
 
-    CLOCK_STOP("Alignment computed")
+    CLOCK_STOP()
+    printf("Alignment computed. Wall time: %.3fs (%.3f alignments per second)\n",
+           CLOCK_SECONDS, num_alignments / CLOCK_SECONDS);
 
     float avg_distance = 0;
     int correct = 0;
     int incorrect = 0;
 
     if (check) {
+        CLOCK_START()
         printf("Checking correctness...\n");
         for (int i=0; i<num_alignments; i++) {
             size_t toffset = sequence_reader.sequences_metadata[i].text_offset;
@@ -153,7 +157,8 @@ int main(int argc, char** argv) {
             int distance = results[i].distance;
             char* cigar = recover_cigar(text, pattern, tlen,
                                         plen,results[i].backtrace,
-                                        backtraces + backtraces_offloaded_elements*i);
+                                        backtraces + backtraces_offloaded_elements*i,
+                                        results[i]);
 
             bool correct_cigar = check_cigar_edit(text, pattern, tlen, plen, cigar);
             bool correct_affine_d = check_affine_distance(text, pattern, tlen,
@@ -172,7 +177,10 @@ int main(int argc, char** argv) {
         }
 
         avg_distance /= num_alignments;
-        printf("Correct=%d Incorrect=%d Average score=%f\n", correct, incorrect, avg_distance);
+        CLOCK_STOP()
+        printf("Correct=%d Incorrect=%d Average score=%f (%.3f alignments per"
+               " second checked)\n",
+               correct, incorrect, avg_distance, num_alignments / CLOCK_SECONDS);
     }
 
     free(results);
