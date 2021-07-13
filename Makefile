@@ -6,7 +6,7 @@ SRC_ALIGNER=tools/aligner.c utils/arg_handler.c utils/sequence_reader.c utils/ve
 SRC_LIB=$(wildcard $(SRC_PATH)/kernels/*cu) $(wildcard $(SRC_PATH)/*.cu)
 SRC_TEST=$(wildcard tests/test_*.cu)
 ARGS=-I . -Ilib/
-ARGS_ALIGNER=-Lbuild/ -L/usr/local/cuda/lib64 $(ARGS)
+ARGS_ALIGNER=-Lbuild/ -L/usr/local/cuda/lib64 -fopenmp $(ARGS)
 NVCC_OPTIONS=-gencode arch=compute_80,code=sm_80
 
 aligner: wfa-gpu-so $(SRC_ALIGNER)

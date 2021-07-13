@@ -144,6 +144,7 @@ int main(int argc, char** argv) {
     if (check) {
         CLOCK_START()
         printf("Checking correctness...\n");
+        #pragma omp parallel for reduction(+:avg_distance,correct,incorrect)
         for (int i=0; i<num_alignments; i++) {
             size_t toffset = sequence_reader.sequences_metadata[i].text_offset;
             size_t poffset = sequence_reader.sequences_metadata[i].pattern_offset;
