@@ -30,10 +30,11 @@ extern "C" void launch_batch_async (const char* sequences_buffer,
                          const size_t num_alignments,
                          const affine_penalties_t penalties,
                          alignment_result_t* results,
-                         wfa_backtrace_t* backtraces) {
+                         wfa_backtrace_t* backtraces,
+                         int max_distance) {
     // TODO: Make this stream reusable instead of creating a new one per batch
-    cudaStream_t stream;
-    cudaStreamCreate(&stream);
+    //cudaStream_t stream;
+    //cudaStreamCreate(&stream);
     // Sequence packing
     char* d_seq_buffer_unpacked;
     char* d_seq_buffer_packed;
@@ -49,7 +50,7 @@ extern "C" void launch_batch_async (const char* sequences_buffer,
         &d_seq_buffer_packed,
         &seq_buffer_packed_size,
         &d_sequences_metadata,
-        stream
+        0
     );
 
     pack_sequences_gpu_async(
@@ -59,7 +60,7 @@ extern "C" void launch_batch_async (const char* sequences_buffer,
         seq_buffer_packed_size,
         d_sequences_metadata,
         num_alignments,
-        stream
+        0
     );
 
     // Alignment
@@ -71,7 +72,8 @@ extern "C" void launch_batch_async (const char* sequences_buffer,
         num_alignments,
         penalties,
         results,
-        backtraces
+        backtraces,
+        max_distance
     );
 
     // TODO

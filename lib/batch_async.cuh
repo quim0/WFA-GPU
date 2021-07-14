@@ -33,6 +33,7 @@ void launch_batch_async (const char* sequences_buffer,
                          const size_t num_alignments,
                          const affine_penalties_t penalties,
                          alignment_result_t* results,
-                         wfa_backtrace_t* backtraces);
+                         wfa_backtrace_t* backtraces,
+                         int max_distance);
 
 #endif

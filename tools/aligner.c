@@ -35,11 +35,12 @@
 #include <errno.h>
 #include <string.h>
 
-#define NUM_ARGUMENTS 4
+#define NUM_ARGUMENTS 5
 
 int main(int argc, char** argv) {
 
     option_t options_arr[NUM_ARGUMENTS] = {
+        // 0
         {.name = "Sequences file",
          .description = "File containing the sequences to align.",
          .short_arg = 'f',
@@ -47,6 +48,7 @@ int main(int argc, char** argv) {
          .required = true,
          .type = ARG_STR
          },
+        // 1
         {.name = "Number of alignments",
          .description = "Number of alignments to read from the file (default=all"
                         " alignments)",
@@ -55,6 +57,7 @@ int main(int argc, char** argv) {
          .required = false,
          .type = ARG_INT
          },
+        // 2
         {.name = "Affine penalties",
          .description = "Gap-affine penalties for the alignment, in format x,o,e",
          .short_arg = 'g',
@@ -62,12 +65,22 @@ int main(int argc, char** argv) {
          .required = true,
          .type = ARG_STR
          },
+        // 3
         {.name = "Check",
          .description = "Check for alignment correctness",
          .short_arg = 'c',
          .long_arg = "check",
          .required = false,
          .type = ARG_NO_VALUE
+         },
+        // 4
+        {.name = "Maximum distance allowed",
+         .description = "Maximum distance that the kernel will be able to "
+                        "compute (default = maximum distance of first alignment)",
+         .short_arg = 'd',
+         .long_arg = "max-distance",
+         .required = false,
+         .type = ARG_INT
          },
     };
 
@@ -99,8 +112,6 @@ int main(int argc, char** argv) {
     penalties.o = o;
     penalties.e = e;
 
-    LOG_DEBUG("Penalties: M=0, X=%d, O=%d, E=%d", penalties.x, penalties.o, penalties.e)
-
     DEBUG_CLOCK_INIT()
     DEBUG_CLOCK_START()
 
@@ -111,10 +122,21 @@ int main(int argc, char** argv) {
 
     DEBUG_CLOCK_STOP("File read.")
 
+    int max_distance;
+    if (options.options[4].parsed) {
+        max_distance = options.options[4].value.int_val;
+    } else {
+        max_distance = sequence_reader.sequences_metadata[0].text_len
+                       + sequence_reader.sequences_metadata[0].pattern_len;
+    }
+
+    LOG_INFO("Penalties: M=0, X=%d, O=%d, E=%d. Maximum distance: %d",
+             penalties.x, penalties.o, penalties.e, max_distance)
+
 
     size_t num_alignments = sequence_reader.num_sequences_read / 2;
     alignment_result_t* results = (alignment_result_t*)calloc(num_alignments, sizeof(alignment_result_t));
-    uint32_t backtraces_offloaded_elements = BT_OFFLOADED_RESULT_ELEMENTS(MAX_STEPS);
+    uint32_t backtraces_offloaded_elements = BT_OFFLOADED_RESULT_ELEMENTS(max_distance);
     wfa_backtrace_t* backtraces = (wfa_backtrace_t*)calloc(
                                                     backtraces_offloaded_elements * num_alignments,
                                                     sizeof(wfa_backtrace_t)
@@ -130,7 +152,8 @@ int main(int argc, char** argv) {
         num_alignments,
         penalties,
         results,
-        backtraces
+        backtraces,
+        max_distance
     );
 
     CLOCK_STOP()

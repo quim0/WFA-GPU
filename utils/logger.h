@@ -39,5 +39,10 @@
 #endif // DEBUG
 
 #define LOG_ERROR(...) fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n");
+#define LOG_INFO(...) {\
+    char tmp[1024];\
+    snprintf(tmp, 1024, __VA_ARGS__); \
+    fprintf(stderr, "INFO: %s (%s:%d)\n", tmp, __FILE__, __LINE__); \
+    }
 
 #endif

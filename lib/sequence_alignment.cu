@@ -30,7 +30,8 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                               const size_t num_alignments,
                               const affine_penalties_t penalties,
                               alignment_result_t* const results,
-                              wfa_backtrace_t* const backtraces) {
+                              wfa_backtrace_t* const backtraces,
+                              const int max_steps) {
     // TODO: Move/remove
     cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
     // TODO: Free results_d
@@ -40,7 +41,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
 
     // TODO: Free backtraces_offloaded_d
     wfa_backtrace_t *bt_offloaded_d;
-    size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(MAX_STEPS);
+    size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(max_steps);
 
     if (bt_offloaded_size >= (1L<<32)) {
         LOG_ERROR("Trying to allocate more backtrace elements than the ones"
@@ -51,7 +52,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
     bt_offloaded_size *= num_alignments;
 
     // Add the results array
-    size_t bt_offloaded_results_size = BT_OFFLOADED_RESULT_ELEMENTS(MAX_STEPS)
+    size_t bt_offloaded_results_size = BT_OFFLOADED_RESULT_ELEMENTS(max_steps)
                                        * num_alignments;
 
     LOG_DEBUG("Allocating %f MiB to store backtraces of %zu alignments.",
@@ -66,7 +67,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                                               + bt_offloaded_size;
 
     // TODO: Reduction of penalties
-    const int max_wf_size = 2 * MAX_STEPS + 1;
+    const int max_wf_size = 2 * max_steps + 1;
     const int active_working_set = max(penalties.o+penalties.e, penalties.x) + 1;
     int offsets_elements = active_working_set * max_wf_size;
     offsets_elements = offsets_elements + (4 - (offsets_elements % 4));
@@ -108,7 +109,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                                               packed_sequences_buffer,
                                               sequences_metadata,
                                               num_alignments,
-                                              MAX_STEPS,
+                                              max_steps,
                                               wf_data_buffer,
                                               penalties,
                                               bt_offloaded_d,
