@@ -31,7 +31,8 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                               const affine_penalties_t penalties,
                               alignment_result_t* const results,
                               wfa_backtrace_t* const backtraces,
-                              const int max_steps) {
+                              const int max_steps,
+                              const int threads_per_block) {
     // TODO: Move/remove
     cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
     // TODO: Free results_d
@@ -97,7 +98,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
 
     // TODO
     dim3 gridSize(num_alignments);
-    dim3 blockSize(128);
+    dim3 blockSize(threads_per_block);
 
     LOG_DEBUG("Launching %d blocks of %d threads with %.2fKiB of shared memory",
               gridSize.x, blockSize.x, (float(sh_mem_size) / (2 << 10)));

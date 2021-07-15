@@ -31,7 +31,8 @@ extern "C" void launch_batch_async (const char* sequences_buffer,
                          const affine_penalties_t penalties,
                          alignment_result_t* results,
                          wfa_backtrace_t* backtraces,
-                         int max_distance) {
+                         const int max_distance,
+                         const int threads_per_block) {
     // TODO: Make this stream reusable instead of creating a new one per batch
     //cudaStream_t stream;
     //cudaStreamCreate(&stream);
@@ -73,7 +74,8 @@ extern "C" void launch_batch_async (const char* sequences_buffer,
         penalties,
         results,
         backtraces,
-        max_distance
+        max_distance,
+        threads_per_block
     );
 
     // TODO

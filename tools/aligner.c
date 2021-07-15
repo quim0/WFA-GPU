@@ -35,7 +35,7 @@
 #include <errno.h>
 #include <string.h>
 
-#define NUM_ARGUMENTS 5
+#define NUM_ARGUMENTS 6
 
 int main(int argc, char** argv) {
 
@@ -79,6 +79,15 @@ int main(int argc, char** argv) {
                         "compute (default = maximum distance of first alignment)",
          .short_arg = 'd',
          .long_arg = "max-distance",
+         .required = false,
+         .type = ARG_INT
+         },
+        // 5
+        {.name = "Number of threads per alginment",
+         .description = "Number of threads per block, each block computes one"
+                        " alignment",
+         .short_arg = 't',
+         .long_arg = "threads",
          .required = false,
          .type = ARG_INT
          },
@@ -130,6 +139,15 @@ int main(int argc, char** argv) {
                        + sequence_reader.sequences_metadata[0].pattern_len;
     }
 
+    // Threads per block
+    int threads_per_block;
+    if (options.options[5].parsed) {
+        threads_per_block = options.options[5].value.int_val;
+    } else {
+        // TODO: Arbitrary number of threads
+        threads_per_block = 512;
+    }
+
     LOG_INFO("Penalties: M=0, X=%d, O=%d, E=%d. Maximum distance: %d",
              penalties.x, penalties.o, penalties.e, max_distance)
 
@@ -153,7 +171,8 @@ int main(int argc, char** argv) {
         penalties,
         results,
         backtraces,
-        max_distance
+        max_distance,
+        threads_per_block
     );
 
     CLOCK_STOP()

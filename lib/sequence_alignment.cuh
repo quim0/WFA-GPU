@@ -32,6 +32,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                               const affine_penalties_t penalties,
                               alignment_result_t* const results,
                               wfa_backtrace_t* const backtraces,
-                              const int max_steps);
+                              const int max_steps,
+                              const int threads_per_block);
 
 #endif
