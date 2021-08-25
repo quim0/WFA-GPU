@@ -24,15 +24,14 @@
 #include "utils/cuda_utils.cuh"
 #include "kernels/sequence_packing_kernel.cuh"
 
-void prepare_pack_sequences_gpu_async (const char* sequences_buffer,
+void prepare_pack_sequences_gpu (const char* sequences_buffer,
                          const size_t sequences_buffer_size,
                          sequence_pair_t* sequences_metadata,
                          const size_t num_alignments,
                          char** device_sequences_buffer_unpacked,
                          char** device_sequences_buffer_packed,
                          size_t* device_sequences_buffer_packed_size,
-                         sequence_pair_t** device_sequences_metadata,
-                         cudaStream_t memcpy_stream) {
+                         sequence_pair_t** device_sequences_metadata) {
     // +1 for the final nullbyte
     size_t mem_needed_unpacked =
                             sequences_metadata[num_alignments-1].text_offset
@@ -48,11 +47,10 @@ void prepare_pack_sequences_gpu_async (const char* sequences_buffer,
     cudaMalloc(device_sequences_buffer_unpacked, mem_needed_unpacked);
     CUDA_CHECK_ERR
 
-    cudaMemcpyAsync(*device_sequences_buffer_unpacked,
+    cudaMemcpy(*device_sequences_buffer_unpacked,
                     sequences_buffer,
                     mem_needed_unpacked,
-                    cudaMemcpyHostToDevice,
-                    memcpy_stream);
+                    cudaMemcpyHostToDevice);
     CUDA_CHECK_ERR
 
     size_t mem_needed_packed = 0;
@@ -88,17 +86,14 @@ void prepare_pack_sequences_gpu_async (const char* sequences_buffer,
     cudaMalloc(device_sequences_metadata, mem_needed_metadata);
     CUDA_CHECK_ERR
 
-    cudaMemcpyAsync(*device_sequences_metadata,
+    cudaMemcpy(*device_sequences_metadata,
                     sequences_metadata,
                     mem_needed_metadata,
-                    cudaMemcpyHostToDevice,
-                    memcpy_stream);
+                    cudaMemcpyHostToDevice);
 }
 
 void pack_sequences_gpu_async (const char* const d_sequences_buffer_unpacked,
                                char* const d_sequences_buffer_packed,
-                               size_t sequences_buffer_size_unpacked,
-                               size_t sequences_buffer_size_packed,
                                const sequence_pair_t* d_sequences_metadata,
                                size_t num_alignments,
                                cudaStream_t stream) {
@@ -115,5 +110,4 @@ void pack_sequences_gpu_async (const char* const d_sequences_buffer_unpacked,
                                             d_sequences_buffer_unpacked,
                                             d_sequences_buffer_packed,
                                             d_sequences_metadata);
-    CUDA_CHECK_ERR
 }

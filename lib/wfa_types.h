@@ -26,6 +26,7 @@
 
 typedef int32_t wfa_offset_t;
 
+#define wfa_backtrace_bits 32
 typedef struct {
     uint32_t backtrace;
     uint32_t prev;

@@ -26,13 +26,20 @@
 #include "alignment_results.h"
 #include "utils/sequences.h"
 
+void allocate_offloaded_bt_d (wfa_backtrace_t** bt_offloaded_d,
+                              const int max_steps,
+                              const size_t num_alignments);
+
 void launch_alignments_async (const char* packed_sequences_buffer,
                               const sequence_pair_t* sequences_metadata,
                               const size_t num_alignments,
                               const affine_penalties_t penalties,
                               alignment_result_t* const results,
                               wfa_backtrace_t* const backtraces,
+                              alignment_result_t* const results_d,
+                              wfa_backtrace_t* bt_offloaded_d,
                               const int max_steps,
-                              const int threads_per_block);
+                              const int threads_per_block,
+                              cudaStream_t stream);
 
 #endif

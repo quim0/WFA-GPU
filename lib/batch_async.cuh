@@ -27,7 +27,26 @@
 #include "alignment_results.h"
 #include "wfa_types.h"
 
-void launch_batch_async (const char* sequences_buffer,
+#if __cplusplus
+extern "C" {
+#endif
+
+void launch_alignments_batched (const char* sequences_buffer,
+                        const size_t sequences_buffer_size,
+                        sequence_pair_t* const sequences_metadata,
+                        const size_t num_alignments,
+                        const affine_penalties_t penalties,
+                        alignment_result_t* results,
+                        wfa_backtrace_t* backtraces,
+                        const int max_distance,
+                        const int threads_per_block,
+                        size_t batch_size);
+
+#if __cplusplus // end of extern "C"
+}
+#endif
+
+void launch_alignments (const char* sequences_buffer,
                          const size_t sequences_buffer_size,
                          const sequence_pair_t* sequences_metadata,
                          const size_t num_alignments,
@@ -36,5 +55,6 @@ void launch_batch_async (const char* sequences_buffer,
                          wfa_backtrace_t* backtraces,
                          const int max_distance,
                          const int threads_per_block);
+
 
 #endif

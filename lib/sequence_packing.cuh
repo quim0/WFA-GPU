@@ -24,20 +24,17 @@
 
 #include "utils/sequences.h"
 
-void prepare_pack_sequences_gpu_async (const char* sequences_buffer,
+void prepare_pack_sequences_gpu (const char* sequences_buffer,
                          const size_t sequences_buffer_size,
                          sequence_pair_t* sequences_metadata,
                          const size_t num_alignments,
                          char** device_sequences_buffer_unpacked,
                          char** device_sequences_buffer_packed,
                          size_t* device_sequences_buffer_packed_size,
-                         sequence_pair_t** device_sequences_metadata,
-                         cudaStream_t memcpy_stream);
+                         sequence_pair_t** device_sequences_metadata);
 
 void pack_sequences_gpu_async (const char* const d_sequences_buffer_unpacked,
                                char* const d_sequences_buffer_packed,
-                               size_t sequences_buffer_size_unpacked,
-                               size_t sequences_buffer_size_packed,
                                const sequence_pair_t* d_sequences_metadata,
                                size_t num_alignments,
                                cudaStream_t stream);

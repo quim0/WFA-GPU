@@ -163,7 +163,7 @@ int main(int argc, char** argv) {
     CLOCK_INIT()
     CLOCK_START()
 
-    launch_batch_async(
+    launch_alignments(
         sequence_reader.sequences_buffer,
         sequence_reader.sequences_buffer_size,
         sequence_reader.sequences_metadata,

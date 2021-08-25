@@ -34,4 +34,12 @@
     } \
 }
 
+/*
+size_t device_global_mem_size (int dnum) {
+    cudaDeviceProp prop;
+    cudaGetDeviceProperties(&prop, dnum);
+    return prop.totalGlobalMem;
+}
+*/
+
 #endif
