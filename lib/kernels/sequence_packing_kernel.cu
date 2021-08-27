@@ -27,19 +27,23 @@
 __global__ void compact_sequences (const char* const sequences_in,
                                    char* const sequences_out,
                                    const sequence_pair_t* sequences_metadata) {
+    const sequence_pair_t curr_batch_alignment_base = sequences_metadata[0];
+    const size_t base_offset = curr_batch_alignment_base.pattern_offset;
+    const size_t base_offset_packed = curr_batch_alignment_base.pattern_offset_packed;
+
     const size_t sequence_idx = blockIdx.x;
     const sequence_pair_t curr_alignment = sequences_metadata[sequence_idx / 2];
     const char* sequence_unpacked;
     char* sequence_packed;
     size_t sequence_unpacked_length;
     if ((sequence_idx % 2) == 0) {
-        sequence_unpacked = &sequences_in[curr_alignment.pattern_offset];
+        sequence_unpacked = &sequences_in[curr_alignment.pattern_offset - base_offset];
         sequence_unpacked_length = curr_alignment.pattern_len;
-        sequence_packed = &sequences_out[curr_alignment.pattern_offset_packed];
+        sequence_packed = &sequences_out[curr_alignment.pattern_offset_packed - base_offset_packed];
     } else {
-        sequence_unpacked = &sequences_in[curr_alignment.text_offset];
+        sequence_unpacked = &sequences_in[curr_alignment.text_offset - base_offset];
         sequence_unpacked_length = curr_alignment.text_len;
-        sequence_packed = &sequences_out[curr_alignment.text_offset_packed];
+        sequence_packed = &sequences_out[curr_alignment.text_offset_packed - base_offset_packed];
     }
 
     // Each sequence buffer is 32 bits aligned
