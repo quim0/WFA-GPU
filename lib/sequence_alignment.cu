@@ -51,6 +51,75 @@ void allocate_offloaded_bt_d (wfa_backtrace_t** bt_offloaded_d,
     CUDA_CHECK_ERR
 }
 
+void reset_offloaded_bt_d (wfa_backtrace_t* bt_offloaded_d,
+                              const int max_steps,
+                              const size_t num_alignments,
+                              cudaStream_t stream) {
+    size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(max_steps);
+
+    bt_offloaded_size *= num_alignments;
+
+    // Add the results array
+    size_t bt_offloaded_results_size = BT_OFFLOADED_RESULT_ELEMENTS(max_steps)
+                                       * num_alignments;
+
+    cudaMemsetAsync(
+        bt_offloaded_d,
+        0,
+        (bt_offloaded_size + bt_offloaded_results_size) * sizeof(wfa_backtrace_t),
+        stream
+    );
+    CUDA_CHECK_ERR
+}
+
+void allocate_wf_data_buffer_d (uint8_t** wf_data_buffer,
+                                const size_t max_steps,
+                                const affine_penalties_t penalties,
+                                const size_t num_alignments) {
+
+    // Create the active working set buffer on global memory
+    const int max_wf_size = 2 * max_steps + 1;
+    const int active_working_set = max(penalties.o+penalties.e, penalties.x) + 1;
+    int offsets_elements = active_working_set * max_wf_size;
+    offsets_elements = offsets_elements + (4 - (offsets_elements % 4));
+    const int bt_elements = offsets_elements;
+    size_t wf_data_buffer_size =
+                    // Offsets space
+                    (offsets_elements * 3 * sizeof(wfa_offset_t))
+                    // Backtraces space
+                    + (bt_elements * 3 * sizeof(wfa_backtrace_t));
+    wf_data_buffer_size *= num_alignments;
+
+    LOG_DEBUG("Allocating %f MiB to store working set data of %zu alignments.",
+              (float)(wf_data_buffer_size) / (1 << 20), num_alignments)
+
+    cudaMalloc(wf_data_buffer, wf_data_buffer_size);
+    CUDA_CHECK_ERR;
+}
+
+void reset_wf_data_buffer_d (uint8_t* wf_data_buffer,
+                             const size_t max_steps,
+                             const affine_penalties_t penalties,
+                             const size_t num_alignments,
+                             cudaStream_t stream) {
+
+    // Create the active working set buffer on global memory
+    const int max_wf_size = 2 * max_steps + 1;
+    const int active_working_set = max(penalties.o+penalties.e, penalties.x) + 1;
+    int offsets_elements = active_working_set * max_wf_size;
+    offsets_elements = offsets_elements + (4 - (offsets_elements % 4));
+    const int bt_elements = offsets_elements;
+    size_t wf_data_buffer_size =
+                    // Offsets space
+                    (offsets_elements * 3 * sizeof(wfa_offset_t))
+                    // Backtraces space
+                    + (bt_elements * 3 * sizeof(wfa_backtrace_t));
+    wf_data_buffer_size *= num_alignments;
+
+    cudaMemsetAsync(wf_data_buffer, 0, wf_data_buffer_size, stream);
+    CUDA_CHECK_ERR;
+}
+
 void launch_alignments_async (const char* packed_sequences_buffer,
                               const sequence_pair_t* sequences_metadata,
                               const size_t num_alignments,
@@ -59,6 +128,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                               wfa_backtrace_t* const backtraces,
                               alignment_result_t *results_d,
                               wfa_backtrace_t* bt_offloaded_d,
+                              uint8_t* const wf_data_buffer,
                               const int max_steps,
                               const int threads_per_block,
                               cudaStream_t stream) {
@@ -75,22 +145,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
     const int active_working_set = max(penalties.o+penalties.e, penalties.x) + 1;
     int offsets_elements = active_working_set * max_wf_size;
     offsets_elements = offsets_elements + (4 - (offsets_elements % 4));
-    const int bt_elements = offsets_elements;
 
-    // Create the active working set buffer on global memory
-    // TODO: Move this allocations outside
-    uint8_t *wf_data_buffer;
-    size_t wf_data_buffer_size =
-                    // Offsets space
-                    (offsets_elements * 3 * sizeof(wfa_offset_t))
-                    // Backtraces space
-                    + (bt_elements * 3 * sizeof(wfa_backtrace_t));
-    wf_data_buffer_size *= num_alignments;
-
-    LOG_DEBUG("Allocating %f MiB to store working set data of %zu alignments.",
-              (float)(wf_data_buffer_size) / (1 << 20), num_alignments)
-    cudaMalloc(&wf_data_buffer, wf_data_buffer_size);
-    CUDA_CHECK_ERR;
 
     size_t sh_mem_size = \
                     // Wavefronts structs space

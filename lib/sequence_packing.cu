@@ -48,9 +48,9 @@ void prepare_pack_sequences_gpu (const char* sequences_buffer,
     CUDA_CHECK_ERR
 
     cudaMemcpy(*device_sequences_buffer_unpacked,
-                    sequences_buffer,
-                    mem_needed_unpacked,
-                    cudaMemcpyHostToDevice);
+               sequences_buffer,
+               mem_needed_unpacked,
+               cudaMemcpyHostToDevice);
     CUDA_CHECK_ERR
 
     size_t mem_needed_packed = 0;
@@ -90,6 +90,7 @@ void prepare_pack_sequences_gpu (const char* sequences_buffer,
                     sequences_metadata,
                     mem_needed_metadata,
                     cudaMemcpyHostToDevice);
+    CUDA_CHECK_ERR
 }
 
 void pack_sequences_gpu_async (const char* const d_sequences_buffer_unpacked,
@@ -98,6 +99,7 @@ void pack_sequences_gpu_async (const char* const d_sequences_buffer_unpacked,
                                size_t num_alignments,
                                cudaStream_t stream) {
 
+    LOG_DEBUG("Packing %zu alignments.", num_alignments)
     dim3 gridSize(num_alignments * 2);
     // TODO: Make this editable as a runtime parameter or in compile time
     // Number of threads working per sequence
@@ -110,4 +112,5 @@ void pack_sequences_gpu_async (const char* const d_sequences_buffer_unpacked,
                                             d_sequences_buffer_unpacked,
                                             d_sequences_buffer_packed,
                                             d_sequences_metadata);
+    CUDA_CHECK_ERR
 }

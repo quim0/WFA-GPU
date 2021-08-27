@@ -35,7 +35,7 @@
 #include <errno.h>
 #include <string.h>
 
-#define NUM_ARGUMENTS 6
+#define NUM_ARGUMENTS 7
 
 int main(int argc, char** argv) {
 
@@ -88,6 +88,14 @@ int main(int argc, char** argv) {
                         " alignment",
          .short_arg = 't',
          .long_arg = "threads",
+         .required = false,
+         .type = ARG_INT
+         },
+         // 6
+        {.name = "Batch size",
+         .description = "Number of alignments per batch.",
+         .short_arg = 'b',
+         .long_arg = "batch-size",
          .required = false,
          .type = ARG_INT
          },
@@ -151,10 +159,20 @@ int main(int argc, char** argv) {
     LOG_INFO("Penalties: M=0, X=%d, O=%d, E=%d. Maximum distance: %d",
              penalties.x, penalties.o, penalties.e, max_distance)
 
-
     size_t num_alignments = sequence_reader.num_sequences_read / 2;
+
+    int batch_size;
+    if (options.options[6].parsed) {
+        batch_size = options.options[6].value.int_val;
+    } else {
+        batch_size = num_alignments;
+    }
+
+    LOG_INFO("Batch size = %d.", batch_size)
+
     alignment_result_t* results = (alignment_result_t*)calloc(num_alignments, sizeof(alignment_result_t));
     uint32_t backtraces_offloaded_elements = BT_OFFLOADED_RESULT_ELEMENTS(max_distance);
+    // TODO: * batch_size instead of * num_alignments (?)
     wfa_backtrace_t* backtraces = (wfa_backtrace_t*)calloc(
                                                     backtraces_offloaded_elements * num_alignments,
                                                     sizeof(wfa_backtrace_t)
@@ -163,7 +181,7 @@ int main(int argc, char** argv) {
     CLOCK_INIT()
     CLOCK_START()
 
-    launch_alignments(
+    launch_alignments_batched(
         sequence_reader.sequences_buffer,
         sequence_reader.sequences_buffer_size,
         sequence_reader.sequences_metadata,
@@ -172,13 +190,16 @@ int main(int argc, char** argv) {
         results,
         backtraces,
         max_distance,
-        threads_per_block
+        threads_per_block,
+        batch_size,
+        check
     );
 
     CLOCK_STOP()
     printf("Alignment computed. Wall time: %.3fs (%.3f alignments per second)\n",
            CLOCK_SECONDS, num_alignments / CLOCK_SECONDS);
 
+    /*
     float avg_distance = 0;
     int correct = 0;
     int incorrect = 0;
@@ -225,6 +246,7 @@ int main(int argc, char** argv) {
                " second checked)\n",
                correct, incorrect, avg_distance, num_alignments / CLOCK_SECONDS);
     }
+    */
 
     free(results);
     free(backtraces);

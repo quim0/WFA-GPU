@@ -41,7 +41,7 @@ bool check_cigar_edit (const char* text,
 		switch (curr_cigar_element) {
 			case 'M':
 				if (pattern[pattern_pos] != text[text_pos]) {
-					printf("Alignment not matching at CCIGAR index %d"
+					LOG_DEBUG("Alignment not matching at CCIGAR index %d"
 						  " (pattern[%d] = %c != text[%d] = %c)\n",
 						  i, pattern_pos, pattern[pattern_pos],
 						  text_pos, text[text_pos]);
@@ -58,7 +58,7 @@ bool check_cigar_edit (const char* text,
 				break;
 			case 'X':
 				if (pattern[pattern_pos] == text[text_pos]) {
-					printf("Alignment not mismatching at CCIGAR index %d"
+					LOG_DEBUG("Alignment not mismatching at CCIGAR index %d"
 						  " (pattern[%d] = %c == text[%d] = %c)\n",
 						  i, pattern_pos, pattern[pattern_pos],
 						  text_pos, text[text_pos]);
@@ -74,13 +74,13 @@ bool check_cigar_edit (const char* text,
 	}
 
 	if (pattern_pos != plen) {
-		printf("Alignment incorrect length, pattern-aligned: %d, "
+		LOG_DEBUG("Alignment incorrect length, pattern-aligned: %d, "
 			  "pattern-length: %d.\n", pattern_pos, plen);
 		return false;
 	}
 
 	if (text_pos != tlen) {
-		printf("Alignment incorrect length, text-aligned: %d, "
+		LOG_DEBUG("Alignment incorrect length, text-aligned: %d, "
 			  "text-length: %d\n", text_pos, tlen);
 		return false;
 	}

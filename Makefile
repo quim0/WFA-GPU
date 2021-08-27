@@ -2,12 +2,12 @@ CC=gcc
 NVCC=nvcc
 SRC_PATH=lib
 BUILD_PATH=build
-SRC_ALIGNER=tools/aligner.c utils/arg_handler.c utils/sequence_reader.c utils/verification.c
-SRC_LIB=$(SRC_PATH)/kernels/sequence_alignment_kernel.cu $(SRC_PATH)/kernels/sequence_packing_kernel.cu $(wildcard $(SRC_PATH)/*.cu)
+SRC_ALIGNER=tools/aligner.c utils/arg_handler.c utils/sequence_reader.c
+SRC_LIB=$(SRC_PATH)/kernels/sequence_alignment_kernel.cu $(SRC_PATH)/kernels/sequence_packing_kernel.cu $(wildcard $(SRC_PATH)/*.cu) utils/verification.c
 SRC_TEST=$(wildcard tests/test_*.cu)
 ARGS=-I . -Ilib/
-ARGS_ALIGNER=-Lbuild/ -L/usr/local/cuda/lib64 -fopenmp $(ARGS)
-NVCC_OPTIONS=-gencode arch=compute_80,code=sm_80
+ARGS_ALIGNER=-Lbuild/ -L/usr/local/cuda/lib64 $(ARGS)
+NVCC_OPTIONS=-gencode arch=compute_80,code=sm_80 -Xcompiler -fopenmp
 
 aligner: wfa-gpu-so $(SRC_ALIGNER)
 	mkdir -p bin

@@ -40,7 +40,8 @@ void launch_alignments_batched (const char* sequences_buffer,
                         wfa_backtrace_t* backtraces,
                         const int max_distance,
                         const int threads_per_block,
-                        size_t batch_size);
+                        size_t batch_size,
+                        bool check_correctness);
 
 #if __cplusplus // end of extern "C"
 }
