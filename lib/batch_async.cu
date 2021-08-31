@@ -147,22 +147,6 @@ void launch_alignments_batched (const char* sequences_buffer,
                        ? num_alignments-1 : (((batch+1) * batch_size) - 1);
         const int curr_batch_size = to - from + 1;
 
-        mem_needed_packed = 0;
-        // Prepare metadata for next batch (calculate)
-        for (int i=0; i<curr_batch_size; i++) {
-            // Pattern
-            sequence_pair_t* curr_alignment = &sequences_metadata[from + i];
-            size_t pattern_length_packed = curr_alignment->pattern_len/4;
-            curr_alignment->pattern_offset_packed = mem_needed_packed;
-            mem_needed_packed += (pattern_length_packed
-                            + (4 - (pattern_length_packed % 4)));
-            // Text
-            size_t text_length_packed = curr_alignment->text_len/4;
-            curr_alignment->text_offset_packed = mem_needed_packed;
-            mem_needed_packed += (text_length_packed
-                            + (4 - (text_length_packed % 4)));
-        }
-
         // Copy metadata of current batch
         cudaMemcpyAsync(d_seq_metadata, &sequences_metadata[from],
                         curr_batch_size * sizeof(sequence_pair_t),
@@ -199,6 +183,24 @@ void launch_alignments_batched (const char* sequences_buffer,
             cudaMemcpyAsync(d_seq_buffer_unpacked, initial_seq, bytes_to_copy_seqs,
                             cudaMemcpyHostToDevice, stream1);
             CUDA_CHECK_ERR
+
+            size_t next_batch_size = to - from + 1;
+
+            mem_needed_packed = 0;
+            // Prepare metadata for next batch (calculate)
+            for (int i=0; i<next_batch_size; i++) {
+                // Pattern
+                sequence_pair_t* curr_alignment = &sequences_metadata[next_from + i];
+                size_t pattern_length_packed = curr_alignment->pattern_len/4;
+                curr_alignment->pattern_offset_packed = mem_needed_packed;
+                mem_needed_packed += (pattern_length_packed
+                                + (4 - (pattern_length_packed % 4)));
+                // Text
+                size_t text_length_packed = curr_alignment->text_len/4;
+                curr_alignment->text_offset_packed = mem_needed_packed;
+                mem_needed_packed += (text_length_packed
+                                + (4 - (text_length_packed % 4)));
+            }
         }
 
         // TODO: max_distance = max_steps (?)
@@ -235,7 +237,7 @@ void launch_alignments_batched (const char* sequences_buffer,
             CLOCK_START()
             // TODO: Add omp ?
             #pragma omp parallel for reduction(+:avg_distance,correct,incorrect)
-            for (int i=from; i<from+curr_batch_size; i++) {
+            for (int i=from; i<=to; i++) {
                 size_t toffset = sequences_metadata[i].text_offset;
                 size_t poffset = sequences_metadata[i].pattern_offset;
 
@@ -247,14 +249,18 @@ void launch_alignments_batched (const char* sequences_buffer,
 
                 int distance = results[i-from].distance;
                 char* cigar = recover_cigar(text, pattern, tlen,
-                                            plen,results[i-from].backtrace,
-                                            backtraces + backtraces_offloaded_elements*i,
+                                            plen, results[i-from].backtrace,
+                                            backtraces + backtraces_offloaded_elements*(i-from),
                                             results[i-from]);
 
                 bool correct_cigar = check_cigar_edit(text, pattern, tlen, plen, cigar);
                 bool correct_affine_d = check_affine_distance(text, pattern, tlen,
                                                               plen, distance,
                                                               penalties, cigar);
+
+                if (!correct_cigar) {
+                    LOG_ERROR("Incorrect cigar %d (%d). Distance: %d. CIGAR: %s\n", i-from, i, distance, cigar);
+                }
 
                 avg_distance += distance;
 

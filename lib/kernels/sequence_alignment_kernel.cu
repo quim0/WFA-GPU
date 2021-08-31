@@ -393,9 +393,12 @@ __global__ void alignment_kernel (
     const int o = penalties.o;
     const int e = penalties.e;
 
+    const sequence_pair_t curr_batch_alignment_base = sequences_metadata[0];
+    const size_t base_offset_packed = curr_batch_alignment_base.pattern_offset_packed;
+
     const sequence_pair_t metadata = sequences_metadata[blockIdx.x];
-    const char* text = packed_sequences_buffer + metadata.text_offset_packed;
-    const char* pattern = packed_sequences_buffer + metadata.pattern_offset_packed;
+    const char* text = packed_sequences_buffer + metadata.text_offset_packed - base_offset_packed;
+    const char* pattern = packed_sequences_buffer + metadata.pattern_offset_packed - base_offset_packed ;
     const int tlen = metadata.text_len;
     const int plen = metadata.pattern_len;
 

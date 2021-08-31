@@ -168,6 +168,11 @@ int main(int argc, char** argv) {
         batch_size = num_alignments;
     }
 
+    if (batch_size <= 0) {
+        LOG_ERROR("Incorrect batch size (%d).", batch_size)
+        exit(-1);
+    }
+
     LOG_INFO("Batch size = %d.", batch_size)
 
     alignment_result_t* results = (alignment_result_t*)calloc(num_alignments, sizeof(alignment_result_t));
