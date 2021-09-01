@@ -135,14 +135,13 @@ bool read_n_sequences (sequence_reader_t* reader, size_t* n) {
         }
 
         // Be sure there is enough space in the metadata array
-        if ((curr_sequence_idx / 2) > reader->sequences_metadata_size) {
+        if ((curr_sequence_idx / 2) >= reader->sequences_metadata_size) {
             if (!grow_metadata_array(reader)) {
                 LOG_ERROR("Could not allocate memory for the sequence metadata"
                           " array.");
                 return false;
             }
         }
-
 
         char* curr_seq_ptr = reader->sequences_buffer + read_bytes;
 
