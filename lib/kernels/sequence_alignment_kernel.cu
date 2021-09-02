@@ -356,22 +356,23 @@ __device__ void update_curr_wf (wfa_wavefront_t* M_wavefronts,
     // index is moved backwards.
     const int wf_idx = (*curr_wf - 1 + active_working_set_size) % active_working_set_size;
 
+    // TODO: Check if this is necessary in some penalties combination
     // Set new wf to NULL, as new wavefront may be smaller than the
     // previous one
-    wfa_offset_t* to_clean_M = M_wavefronts[wf_idx].offsets - (max_wf_size/2);
-    M_wavefronts[wf_idx].exist = false;
+    //wfa_offset_t* to_clean_M = M_wavefronts[wf_idx].offsets - (max_wf_size/2);
+    //M_wavefronts[wf_idx].exist = false;
 
-    wfa_offset_t* to_clean_I = I_wavefronts[wf_idx].offsets - (max_wf_size/2);
-    I_wavefronts[wf_idx].exist = false;
+    //wfa_offset_t* to_clean_I = I_wavefronts[wf_idx].offsets - (max_wf_size/2);
+    //I_wavefronts[wf_idx].exist = false;
 
-    wfa_offset_t* to_clean_D = D_wavefronts[wf_idx].offsets - (max_wf_size/2);
-    D_wavefronts[wf_idx].exist = false;
+    //wfa_offset_t* to_clean_D = D_wavefronts[wf_idx].offsets - (max_wf_size/2);
+    //D_wavefronts[wf_idx].exist = false;
 
-    for (int i=threadIdx.x; i<max_wf_size; i+=blockDim.x) {
-        to_clean_M[i] = -1;
-        to_clean_D[i] = -1;
-        to_clean_I[i] = -1;
-    }
+    //for (int i=threadIdx.x; i<max_wf_size; i+=blockDim.x) {
+    //    to_clean_M[i] = -1;
+    //    to_clean_D[i] = -1;
+    //    to_clean_I[i] = -1;
+    //}
 
     *curr_wf = wf_idx;
 

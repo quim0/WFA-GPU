@@ -27,9 +27,9 @@
 #include "utils/wf_clock.h"
 #include "utils/verification.cuh"
 
-size_t bytes_to_copy_unpacked (int from,
-                               int to,
-                               sequence_pair_t* sequences_metadata) {
+size_t bytes_to_copy_unpacked (const int from,
+                               const int to,
+                               const sequence_pair_t* sequences_metadata) {
     // +1 for the final byte
     size_t final_byte = sequences_metadata[to].text_offset +
                                  sequences_metadata[to].text_len + 1;
@@ -115,7 +115,7 @@ void launch_alignments_batched (const char* sequences_buffer,
     cudaMalloc(&d_seq_metadata, mem_needed_metadata);
     CUDA_CHECK_ERR
 
-    LOG_DEBUG("Aligning %d alignments using %d batchs of %d elements.",
+    LOG_DEBUG("Aligning %zu alignments using %d batchs of %zu elements.",
               num_alignments, num_batchs, batch_size);
 
     // Copy unpacked sequences of current batch
