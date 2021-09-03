@@ -226,6 +226,20 @@ void launch_alignments_batched (const char* sequences_buffer,
 
         LOG_DEBUG("Batch %d/%d computed", batch+1, num_batchs);
 
+        int alignments_not_computed = 0;
+        for (int i=0; i<curr_batch_size; i++) {
+            if (!results[i].finished) alignments_not_computed++;
+        }
+
+        if (alignments_not_computed > 0) {
+            LOG_INFO("(Batch %d) %d/%d alignemnts could not be computed on the GPU.",
+                     batch, alignments_not_computed, curr_batch_size)
+            // TODO: Make the computations on the CPU using the WFA library
+        }
+
+        // TODO: check correctness/ recover cigar from previous batch while the
+        // kernel from current batch is running (?)
+
         // Check correctness if asked
         if (check_correctness) {
             LOG_DEBUG("Checking batch %d correctnes.", batch+1);
@@ -235,7 +249,6 @@ void launch_alignments_batched (const char* sequences_buffer,
             int incorrect = 0;
             CLOCK_INIT()
             CLOCK_START()
-            // TODO: Add omp ?
             #pragma omp parallel for reduction(+:avg_distance,correct,incorrect)
             for (int i=from; i<=to; i++) {
                 size_t toffset = sequences_metadata[i].text_offset;

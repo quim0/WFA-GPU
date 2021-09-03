@@ -508,6 +508,8 @@ __global__ void alignment_kernel (
     const int target_k_abs = (target_k >= 0) ? target_k : -target_k;
     const wfa_offset_t target_offset = EWAVEFRONT_OFFSET(tlen, plen);
 
+    bool finished = false;
+
     int distance = 0;
     // steps = number of editions
     int steps = 0;
@@ -572,6 +574,7 @@ __global__ void alignment_kernel (
                 __syncthreads();
 
                 if (target_k_abs <= distance && M_exist && M_wavefronts[curr_wf].offsets[target_k] == target_offset) {
+                    finished = true;
                     break;
                 }
 
@@ -588,10 +591,13 @@ __global__ void alignment_kernel (
 
         __syncthreads();
         }
+    } else {
+        finished = true;
     }
 
     if  (tid == 0) {
         results[blockIdx.x].distance = distance;
+        results[blockIdx.x].finished = finished;
         results[blockIdx.x].backtrace = M_wavefronts[curr_wf].backtraces[target_k];
 
         wfa_backtrace_t* curr_result = &M_wavefronts[curr_wf].backtraces[target_k];

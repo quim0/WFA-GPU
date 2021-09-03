@@ -25,6 +25,7 @@
 #include "wfa_types.h"
 
 typedef struct {
+    bool finished;
     int distance;
     wfa_backtrace_t backtrace;
     int num_bt_blocks;
