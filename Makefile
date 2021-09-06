@@ -4,15 +4,17 @@ SRC_PATH=lib
 BUILD_PATH=build
 SRC_ALIGNER=tools/aligner.c utils/arg_handler.c utils/sequence_reader.c
 SRC_LIB=$(SRC_PATH)/kernels/sequence_alignment_kernel.cu $(SRC_PATH)/kernels/sequence_packing_kernel.cu $(wildcard $(SRC_PATH)/*.cu) utils/verification.c
+SRC_WFA_CPU=utils/wfa_cpu.c
 SRC_TEST=$(wildcard tests/test_*.cu)
 ARGS=-I . -Ilib/
 ARGS_ALIGNER=-Lbuild/ -L/usr/local/cuda/lib64 $(ARGS)
+ARGS_WFA_CPU=-Lexternal/WFA/build/ $(ARGS) -Iexternal/WFA/ -lwfa
 NVCC_OPTIONS=-gencode arch=compute_80,code=sm_80 -Xcompiler -fopenmp
 
-aligner: wfa-gpu-so $(SRC_ALIGNER)
+aligner: wfa-cpu wfa-gpu-so $(SRC_ALIGNER)
 	mkdir -p bin
 # Link static library, could be possible to link dynamic library too
-	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -O3 -o bin/wfa.affine.gpu -lwfagpu
+	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -Lexternal/WFA/build/ -O3 -o bin/wfa.affine.gpu -lwfagpu -lwfa
 	echo "!! Before running put `pwd`/build in LD_LIBRARY_PATH env variable."
 
 aligner-debug: wfa-gpu-debug-so $(SRC_ALIGNER)
@@ -54,7 +56,12 @@ wfa-gpu-profile-so: $(SRC_LIB)
 	mv *.o build/
 	$(NVCC) $(NVCC_OPTIONS) -lineinfo -shared -o build/libwfagpu.so build/*.o -lcudart
 
-wfa-gpu: $(SRC_LIB)
+wfa-cpu: $(SRC_WFA_CPU)
+	mkdir -p build
+	$(CC) $(ARGS) $(ARGS_WFA_CPU) -fPIC -c $^
+	mv *.o build/
+
+wfa-gpu: $(SRC_LIB) wfa-cpu
 # TODO: Not working well
 	mkdir -p build
 	$(NVCC) -O2 $(NVCC_OPTIONS) $(ARGS) -Xcompiler -fPIC -dc $^

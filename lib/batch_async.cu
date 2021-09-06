@@ -26,6 +26,7 @@
 #include "utils/logger.h"
 #include "utils/wf_clock.h"
 #include "utils/verification.cuh"
+#include "utils/wfa_cpu.h"
 
 size_t bytes_to_copy_unpacked (const int from,
                                const int to,
@@ -226,14 +227,35 @@ void launch_alignments_batched (const char* sequences_buffer,
 
         LOG_DEBUG("Batch %d/%d computed", batch+1, num_batchs);
 
-        int alignments_not_computed = 0;
+        int alignments_computed_cpu = 0;
         for (int i=0; i<curr_batch_size; i++) {
-            if (!results[i].finished) alignments_not_computed++;
+            int real_i = i + from;
+            if (!results[i].finished) {
+                alignments_computed_cpu++;
+
+                size_t toffset = sequences_metadata[real_i].text_offset;
+                size_t poffset = sequences_metadata[real_i].pattern_offset;
+
+                const char* text = &sequences_buffer[toffset];
+                const char* pattern = &sequences_buffer[poffset];
+
+                size_t tlen = sequences_metadata[real_i].text_len;
+                size_t plen = sequences_metadata[real_i].pattern_len;
+
+                results[i].distance = compute_alignment_cpu(
+                    pattern, text,
+                    plen, tlen,
+                    penalties.x, penalties.o, penalties.e
+                );
+
+                // TODO: CIGAR ?
+            }
         }
 
-        if (alignments_not_computed > 0) {
-            LOG_INFO("(Batch %d) %d/%d alignemnts could not be computed on the GPU.",
-                     batch, alignments_not_computed, curr_batch_size)
+        if (alignments_computed_cpu > 0) {
+            LOG_INFO("(Batch %d) %d/%d alignemnts could not be computed on the"
+                     " GPU and where offloaded to the CPU.",
+                     batch, alignments_computed_cpu, curr_batch_size)
             // TODO: Make the computations on the CPU using the WFA library
         }
 
@@ -251,6 +273,13 @@ void launch_alignments_batched (const char* sequences_buffer,
             CLOCK_START()
             #pragma omp parallel for reduction(+:avg_distance,correct,incorrect)
             for (int i=from; i<=to; i++) {
+                // TODO: Check also CPU distances ?
+                if (!results[i-from].finished) {
+                    correct++;
+                    avg_distance += results[i-from].distance;
+                    continue;
+                }
+
                 size_t toffset = sequences_metadata[i].text_offset;
                 size_t poffset = sequences_metadata[i].pattern_offset;
 
