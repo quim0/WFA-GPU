@@ -17,13 +17,13 @@ aligner: wfa-cpu wfa-gpu-so $(SRC_ALIGNER)
 	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -Lexternal/WFA/build/ -O3 -o bin/wfa.affine.gpu -lwfagpu -lwfa
 	echo "!! Before running put `pwd`/build in LD_LIBRARY_PATH env variable."
 
-aligner-debug: wfa-gpu-debug-so $(SRC_ALIGNER)
+aligner-debug: wfa-cpu wfa-gpu-debug-so $(SRC_ALIGNER)
 	mkdir -p bin
-	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -ggdb -DDEBUG -o bin/wfa.affine.gpu -lwfagpu
+	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -ggdb -DDEBUG -Lexternal/WFA/build/ -o bin/wfa.affine.gpu -lwfagpu -lwfa
 
-aligner-profile: wfa-gpu-profile-so $(SRC_ALIGNER)
+aligner-profile: wfa-cpu wfa-gpu-profile-so $(SRC_ALIGNER)
 	mkdir -p bin
-	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -o bin/wfa.affine.gpu -lwfagpu
+	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -Lexternal/WFA/build/ -o bin/wfa.affine.gpu -lwfagpu -lwfa
 
 run-tests:
 	for f in bin/test-*; do ./$$f; done

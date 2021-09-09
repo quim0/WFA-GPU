@@ -185,7 +185,7 @@ void launch_alignments_batched (const char* sequences_buffer,
                             cudaMemcpyHostToDevice, stream1);
             CUDA_CHECK_ERR
 
-            size_t next_batch_size = to - from + 1;
+            size_t next_batch_size = next_to - next_from + 1;
 
             mem_needed_packed = 0;
             // Prepare metadata for next batch (calculate)
