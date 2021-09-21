@@ -24,6 +24,7 @@
 #include "utils/arg_handler.h"
 #include "utils/sequence_reader.h"
 #include "utils/verification.h"
+#include "utils/device_query.cuh"
 #include "affine_penalties.h"
 #include "alignment_results.h"
 #include "wfa_types.h"
@@ -100,6 +101,23 @@ int main(int argc, char** argv) {
          .type = ARG_INT
          },
     };
+
+    int cuda_devices = 0;
+    get_num_cuda_devices(&cuda_devices);
+    if (cuda_devices == 0) {
+        LOG_ERROR("No CUDA devices detected.")
+        exit(-1);
+    }
+
+    int major, minor;
+    get_cuda_capability(0, &major, &minor);
+
+    char* device_name = get_cuda_dev_name(0);
+
+    LOG_INFO("Using CUDA device \"%s\" with capability %d.%d",
+             device_name, major, minor)
+
+    free(device_name);
 
     options_t options = {options_arr, NUM_ARGUMENTS};
 
