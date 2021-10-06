@@ -360,13 +360,13 @@ __device__ void update_curr_wf (wfa_wavefront_t* M_wavefronts,
     // Set new wf to NULL, as new wavefront may be smaller than the
     // previous one
     //wfa_offset_t* to_clean_M = M_wavefronts[wf_idx].offsets - (max_wf_size/2);
-    //M_wavefronts[wf_idx].exist = false;
+    M_wavefronts[wf_idx].exist = false;
 
     //wfa_offset_t* to_clean_I = I_wavefronts[wf_idx].offsets - (max_wf_size/2);
-    //I_wavefronts[wf_idx].exist = false;
+    I_wavefronts[wf_idx].exist = false;
 
     //wfa_offset_t* to_clean_D = D_wavefronts[wf_idx].offsets - (max_wf_size/2);
-    //D_wavefronts[wf_idx].exist = false;
+    D_wavefronts[wf_idx].exist = false;
 
     //for (int i=threadIdx.x; i<max_wf_size; i+=blockDim.x) {
     //    to_clean_M[i] = -1;
@@ -398,10 +398,32 @@ __global__ void alignment_kernel (
     const size_t base_offset_packed = curr_batch_alignment_base.pattern_offset_packed;
 
     const sequence_pair_t metadata = sequences_metadata[blockIdx.x];
-    const char* text = packed_sequences_buffer + metadata.text_offset_packed - base_offset_packed;
-    const char* pattern = packed_sequences_buffer + metadata.pattern_offset_packed - base_offset_packed ;
+    const char* text_global = packed_sequences_buffer + metadata.text_offset_packed - base_offset_packed;
+    const char* pattern_global = packed_sequences_buffer + metadata.pattern_offset_packed - base_offset_packed ;
     const int tlen = metadata.text_len;
     const int plen = metadata.pattern_len;
+
+    // 2KiB to test
+    __shared__ char sequences_sh[2048];
+    //for (int i=threadIdx.x; i<2048; i+=blockDim.x) {
+    //    sequences_sh[i] = 0;
+    //}
+    //__syncthreads();
+
+    // Sequence buffers are 32 bits aligned
+    const int p_buf_packed_len = (plen + (4 - (plen % 4))) / 4;
+    const int t_buf_packed_len = (tlen + (4 - (tlen % 4))) / 4;
+
+    char* pattern = &sequences_sh[0];
+    char* text = &sequences_sh[1024];
+
+    for (int i=threadIdx.x*4; i<p_buf_packed_len+4; i+=blockDim.x*4) {
+        *(uint32_t*)(&pattern[i]) = *(uint32_t*)(&pattern_global[i]);
+    }
+    for (int i=threadIdx.x*4; i<t_buf_packed_len+4; i+=blockDim.x*4) {
+        *(uint32_t*)(&text[i]) = *(uint32_t*)(&text_global[i]);
+    }
+    //__syncthreads();
 
     // TODO: Move to function/macro + use in lib/sequence_alignment.cu
     size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(max_steps);
