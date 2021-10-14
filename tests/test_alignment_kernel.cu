@@ -24,12 +24,14 @@
 #include "utils/logger.h"
 #include "utils/sequences.h"
 #include "utils/verification.cuh"
-#include "sequence_packing.cuh"
-#include "sequence_alignment.cuh"
+#include "batch_async.cuh"
 #include "wfa_types.h"
 #include "affine_penalties.h"
 #include "alignment_results.h"
 #include "tests/test.h"
+
+#define MAX_STEPS 512
+#define THREADS_PER_BLOCK 128
 
 
 SET_TEST_NAME("ALIGNMENT KERNEL")
@@ -53,51 +55,27 @@ void test_one_alignment() {
     strcpy(sequence_unpacked + sequence_metadata[0].text_offset, "GAATA");
     size_t num_alignments = 1;
 
-    char* d_seq_buf_unpacked = NULL;
-    char* d_seq_buf_packed = NULL;
-    size_t d_seq_buf_packed_size = 0;
-    sequence_pair_t* d_seq_metadata = NULL;
-
-    prepare_pack_sequences_gpu_async(
-        sequence_unpacked,
-        seq_buf_size,
-        sequence_metadata,
-        num_alignments,
-        &d_seq_buf_unpacked,
-        &d_seq_buf_packed,
-        &d_seq_buf_packed_size,
-        &d_seq_metadata,
-        0
-    );
-
-    pack_sequences_gpu_async(
-        d_seq_buf_unpacked,
-        d_seq_buf_packed,
-        seq_buf_size,
-        d_seq_buf_packed_size,
-        d_seq_metadata,
-        num_alignments,
-        0
-    );
-
-
     affine_penalties_t penalties = {.x = 2, .o = 3, .e = 1};
-    //// Only one sequence in this test
+    // Only one sequence in this test
     alignment_result_t results = {0};
 
-    // TODO: Move max steps outside launch_alignments_async function
     wfa_backtrace_t* backtraces = (wfa_backtrace_t*)calloc(
                                                     BT_OFFLOADED_RESULT_ELEMENTS(MAX_STEPS),
                                                     sizeof(wfa_backtrace_t)
                                                     );
 
-    launch_alignments_async(
-        d_seq_buf_packed,
-        d_seq_metadata,
+    launch_alignments_batched(
+        sequence_unpacked,
+        seq_buf_size,
+        sequence_metadata,
         num_alignments,
         penalties,
         &results,
-        backtraces
+        backtraces,
+        MAX_STEPS,
+        THREADS_PER_BLOCK,
+        num_alignments, // Batch size
+        false // check correctness
     );
 
     cudaDeviceSynchronize();
@@ -106,22 +84,24 @@ void test_one_alignment() {
 
     penalties = {.x = 1, .o = 0, .e = 1};
 
-    launch_alignments_async(
-        d_seq_buf_packed,
-        d_seq_metadata,
+    launch_alignments_batched(
+        sequence_unpacked,
+        seq_buf_size,
+        sequence_metadata,
         num_alignments,
         penalties,
         &results,
-        backtraces
+        backtraces,
+        MAX_STEPS,
+        THREADS_PER_BLOCK,
+        num_alignments, // Batch size
+        false // check correctness
     );
 
     cudaDeviceSynchronize();
 
     TEST_ASSERT(results.distance == 3)
 
-    cudaFree(d_seq_buf_unpacked);
-    cudaFree(d_seq_buf_packed);
-    cudaFree(d_seq_metadata);
     free(sequence_unpacked);
     free(sequence_metadata);
     free(backtraces);
@@ -176,53 +156,30 @@ void test_multiple_alignments_affine () {
     "TACAAATGTACACGGCAATGAGCTATCCAACAATAATTTTACAGTTTTTGGAATATCGGTTGATGTTTTTGGAGTGTCCTCACGCAGTTAGGGTGCGCCGCAAGATCTCTTGAAACATAGTTGGGAACGGTAGTTGTAGACGAGGGGGGGGCCAGGCAAACGATCTCACCGCGTGCGCAAGGAAAGCATGGTTTATAATCGGTCCCGATCCTCACGCCCTGAGCACCTGTTAGTGACGTTGAGATCATGGACCATGACAATGATGTGCTACTGTACTCGTTATCCACACGACGTGCGCTTC");
     size_t num_alignments = 4;
 
-    char* d_seq_buf_unpacked = NULL;
-    char* d_seq_buf_packed = NULL;
-    size_t d_seq_buf_packed_size = 0;
-    sequence_pair_t* d_seq_metadata = NULL;
-
-    prepare_pack_sequences_gpu_async(
-        sequence_unpacked,
-        seq_buf_size,
-        sequence_metadata,
-        num_alignments,
-        &d_seq_buf_unpacked,
-        &d_seq_buf_packed,
-        &d_seq_buf_packed_size,
-        &d_seq_metadata,
-        0
-    );
-
-    pack_sequences_gpu_async(
-        d_seq_buf_unpacked,
-        d_seq_buf_packed,
-        seq_buf_size,
-        d_seq_buf_packed_size,
-        d_seq_metadata,
-        num_alignments,
-        0
-    );
-
     cudaDeviceSynchronize();
 
     affine_penalties_t penalties = {.x = 2, .o = 3, .e = 1};
     alignment_result_t* results = (alignment_result_t*)calloc(num_alignments,
                                                               sizeof(alignment_result_t));
 
-    // TODO: Move max steps outside launch_alignments_async function
     uint32_t backtraces_offloaded_elements = BT_OFFLOADED_RESULT_ELEMENTS(MAX_STEPS);
     wfa_backtrace_t* backtraces = (wfa_backtrace_t*)calloc(
                                                     backtraces_offloaded_elements * num_alignments,
                                                     sizeof(wfa_backtrace_t)
                                                     );
 
-    launch_alignments_async(
-        d_seq_buf_packed,
-        d_seq_metadata,
+    launch_alignments_batched(
+        sequence_unpacked,
+        seq_buf_size,
+        sequence_metadata,
         num_alignments,
         penalties,
         results,
-        backtraces
+        backtraces,
+        MAX_STEPS,
+        THREADS_PER_BLOCK,
+        num_alignments, // Batch size
+        false // check correctness
     );
 
     cudaDeviceSynchronize();
@@ -249,9 +206,6 @@ void test_multiple_alignments_affine () {
         free(cigar);
     }
 
-    cudaFree(d_seq_buf_unpacked);
-    cudaFree(d_seq_buf_packed);
-    cudaFree(d_seq_metadata);
     free(sequence_unpacked);
     free(sequence_metadata);
     free(results);
@@ -300,53 +254,30 @@ void test_multiple_alignments_edit () {
     "GAACAAAGGGTAAATACCCCAAGATCACTACCCGGGGGTCCCACGCCTGGATTCGGGTACGGTTAGGTCGAGACAGTCCCACCTGAGATGGCGGCACACTGTTACGGAAGACAGTGCAGCTAGCGTGTAAGGACCCATACGCTGATAGAGTTTCCCCACGCAAAGGCCTAATGAGATTAGATCGCTACCCACTCTGGCCTCCCCAATGTACGGCGTAATCCAATCCGAGATACAGGTCCATAGGTTGTAAAATGATTATAGTTGCTCTTGCAGTCTTAATAAAAATCATACCCTAACTTCCGGATTTATATTAAACTAGAAAAAACACCCCGATTTTGTTGATACAACCTTATTAACGATAGACAGAACTTACATCTTCCCCCCCAGGGACCTCAACGCCACCATAGATACACTGGGCTGGCCTGGCAATAACACTTCTTTACATTACAAGGCCATTCTGCCTTGATCGTCCTGAGTGGTCACTGGTGTGAAAATAGAAAGTCTGAACTGTAACTTTGCGCGTGGTAGCATGACTATGGGGTTTGTGCCAGGAAGTCATGCGCCAAGTTCGCAGATCTATTTGGAAGGCCATTGATTGTTCTGCGCATATGTGAAATCCAAACTGAGGGCCTATTTTGGTCCCCATTAATCCGACGAGAGACCCGACAACTTAAATGCACCCCAGTTGCAAGGCTACACGCACCCGCTACACGGGACCTGCAAACTATAGCCGTTACAACCCTTTCACTTACTCCTGAACGCACCATACCTGATGGTTCTTGTTAATTCTATCCAGGGAATCACGTAATTGTGCGCGCGCACGATTCGCCGCTGTCGTGCGACCCAATGAAATCTGGCATAGTTGACCTTTAACCACCAAAGCCCGTAACCTCTGCCTGTTTGTTCGCTGCCTCGCCTGTACAAACCAATAGCTACCGTAAACAGTGATATTGATGAAGAAGTTACTTCAAGACGTTCATCCGGACACCTGC");
     size_t num_alignments = 3;
 
-    char* d_seq_buf_unpacked = NULL;
-    char* d_seq_buf_packed = NULL;
-    size_t d_seq_buf_packed_size = 0;
-    sequence_pair_t* d_seq_metadata = NULL;
-
-    prepare_pack_sequences_gpu_async(
-        sequence_unpacked,
-        seq_buf_size,
-        sequence_metadata,
-        num_alignments,
-        &d_seq_buf_unpacked,
-        &d_seq_buf_packed,
-        &d_seq_buf_packed_size,
-        &d_seq_metadata,
-        0
-    );
-
-    pack_sequences_gpu_async(
-        d_seq_buf_unpacked,
-        d_seq_buf_packed,
-        seq_buf_size,
-        d_seq_buf_packed_size,
-        d_seq_metadata,
-        num_alignments,
-        0
-    );
-
     cudaDeviceSynchronize();
 
     affine_penalties_t penalties = {.x = 1, .o = 0, .e = 1};
     alignment_result_t* results = (alignment_result_t*)calloc(num_alignments,
                                                               sizeof(alignment_result_t));
 
-    // TODO: Move max steps outside launch_alignments_async function
     uint32_t backtraces_offloaded_elements = BT_OFFLOADED_RESULT_ELEMENTS(MAX_STEPS);
     wfa_backtrace_t* backtraces = (wfa_backtrace_t*)calloc(
                                                     backtraces_offloaded_elements * num_alignments,
                                                     sizeof(wfa_backtrace_t)
                                                     );
 
-    launch_alignments_async(
-        d_seq_buf_packed,
-        d_seq_metadata,
+    launch_alignments_batched(
+        sequence_unpacked,
+        seq_buf_size,
+        sequence_metadata,
         num_alignments,
         penalties,
         results,
-        backtraces
+        backtraces,
+        MAX_STEPS,
+        THREADS_PER_BLOCK,
+        num_alignments, // Batch size
+        false // check correctness
     );
 
     cudaDeviceSynchronize();
@@ -354,7 +285,6 @@ void test_multiple_alignments_edit () {
     const int correct_results[3] = {8, 14, 83};
 
     for (int i=0; i<num_alignments; i++) {
-        // TODO
         char* text = &sequence_unpacked[sequence_metadata[i].text_offset];
         char* pattern = &sequence_unpacked[sequence_metadata[i].pattern_offset];
         size_t tlen = sequence_metadata[i].text_len;
@@ -370,9 +300,6 @@ void test_multiple_alignments_edit () {
         TEST_ASSERT(distance == correct_results[i])
     }
 
-    cudaFree(d_seq_buf_unpacked);
-    cudaFree(d_seq_buf_packed);
-    cudaFree(d_seq_metadata);
     free(sequence_unpacked);
     free(sequence_metadata);
     free(results);

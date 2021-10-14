@@ -246,7 +246,7 @@ void test_one_sequence () {
     size_t d_seq_buf_packed_size = 0;
     sequence_pair_t* d_seq_metadata = NULL;
 
-    prepare_pack_sequences_gpu_async(
+    prepare_pack_sequences_gpu(
         sequence_unpacked,
         seq_buf_size,
         sequence_metadata,
@@ -254,8 +254,7 @@ void test_one_sequence () {
         &d_seq_buf_unpacked,
         &d_seq_buf_packed,
         &d_seq_buf_packed_size,
-        &d_seq_metadata,
-        0
+        &d_seq_metadata
     );
 
     TEST_ASSERT(d_seq_buf_packed != NULL)
@@ -266,8 +265,6 @@ void test_one_sequence () {
     pack_sequences_gpu_async(
         d_seq_buf_unpacked,
         d_seq_buf_packed,
-        seq_buf_size,
-        d_seq_buf_packed_size,
         d_seq_metadata,
         num_alignments,
         0
@@ -355,7 +352,7 @@ void test_multiple_sequences () {
     size_t d_seq_buf_packed_size = 0;
     sequence_pair_t* d_seq_metadata = NULL;
 
-    prepare_pack_sequences_gpu_async(
+    prepare_pack_sequences_gpu(
         sequence_unpacked,
         seq_buf_size,
         sequence_metadata,
@@ -363,8 +360,7 @@ void test_multiple_sequences () {
         &d_seq_buf_unpacked,
         &d_seq_buf_packed,
         &d_seq_buf_packed_size,
-        &d_seq_metadata,
-        0
+        &d_seq_metadata
     );
 
     TEST_ASSERT(d_seq_buf_packed != NULL)
@@ -375,8 +371,6 @@ void test_multiple_sequences () {
     pack_sequences_gpu_async(
         d_seq_buf_unpacked,
         d_seq_buf_packed,
-        seq_buf_size,
-        d_seq_buf_packed_size,
         d_seq_metadata,
         num_alignments,
         0
