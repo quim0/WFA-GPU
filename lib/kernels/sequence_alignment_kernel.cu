@@ -124,8 +124,6 @@ __device__ uint32_t offload_backtrace (unsigned int* const last_free_bt_position
     global_backtraces_array[old_val].backtrace = backtrace.backtrace;
     global_backtraces_array[old_val].prev = backtrace.prev;
 
-    //printf("(tid = %d) Offloading backtrace! old: %d\n", threadIdx.x, old_val);
-
     // TODO: Check if new_val is more than 32 bits
     return old_val;
 }
@@ -303,16 +301,17 @@ __device__ void next_MDI (wfa_wavefront_t* M_wavefronts,
                                         );
         // Extend
         wfa_offset_t M_offset = (wfa_offset_t)(M_offset_pb >> 32);
-        M_offset = WF_extend_kernel(text, pattern, tlen, plen, k, M_offset);
+        if (M_offset >= 0)
+            M_offset = WF_extend_kernel(text, pattern, tlen, plen, k, M_offset);
 
         M_wavefronts[curr_wf].offsets[k] = M_offset;
 
         affine_op_t M_op = (affine_op_t)(M_offset_pb & 0xffffffff);
         wfa_backtrace_t M_backtrace;
-        if (M_op == OP_INS) {
-            M_backtrace = I_backtrace;
-        } else if (M_op == OP_SUB) {
+        if (M_op == OP_SUB) {
             M_backtrace = X_backtrace;
+        } else if (M_op == OP_INS) {
+            M_backtrace = I_backtrace;
         } else {
             M_backtrace = D_backtrace;
         }
@@ -321,7 +320,6 @@ __device__ void next_MDI (wfa_wavefront_t* M_wavefronts,
 
         // Offload backtraces if the bitvector is full
         if (BT_IS_FULL(M_backtrace.backtrace)) {
-            //printf("OFFLOADING BACKTRACES!!!!!\n");
             uint32_t prev = offload_backtrace(last_free_bt_position,
                                               M_backtrace,
                                               offloaded_backtraces);
@@ -336,12 +334,12 @@ __device__ void next_MDI (wfa_wavefront_t* M_wavefronts,
         M_wavefronts[curr_wf].lo = lo;
         M_wavefronts[curr_wf].exist = true;
 
-        I_wavefronts[curr_wf].hi = hi;
-        I_wavefronts[curr_wf].lo = lo;
+        I_wavefronts[curr_wf].hi = hi_ID;
+        I_wavefronts[curr_wf].lo = lo_ID;
         I_wavefronts[curr_wf].exist = true;
 
-        D_wavefronts[curr_wf].hi = hi;
-        D_wavefronts[curr_wf].lo = lo;
+        D_wavefronts[curr_wf].hi = hi_ID;
+        D_wavefronts[curr_wf].lo = lo_ID;
         D_wavefronts[curr_wf].exist = true;
     }
 }
@@ -459,7 +457,7 @@ __global__ void alignment_kernel (
 
     // Initialize all wavefronts to -1
     for (int i=tid; i<(offsets_size * 3); i+=blockDim.x) {
-        M_base[i] = -1;
+        M_base[i] = -1000;
     }
 
     for (int i=tid; i<(bt_size * 3); i+=blockDim.x) {
@@ -536,9 +534,10 @@ __global__ void alignment_kernel (
             const int e_delta = (curr_wf + e) % active_working_set_size;
             const int x_delta = (curr_wf + x) % active_working_set_size;
             if ((distance - o - e) >= 0) {
-                // Just test with I because I and D exist in the same distances
-                GAP_exist = M_wavefronts[o_delta].exist
-                          || I_wavefronts[e_delta].exist;
+                // Just test ~I matrix as it will exist at the same wavefronts
+                // as ~D
+                GAP_exist = M_wavefronts[o_delta].exist ||
+                            I_wavefronts[e_delta].exist;
             }
 
             if (GAP_exist) {
@@ -550,12 +549,17 @@ __global__ void alignment_kernel (
             }
 
             if (!GAP_exist && !M_exist) {
+                M_wavefronts[curr_wf].exist = false;
+                D_wavefronts[curr_wf].exist = false;
+                I_wavefronts[curr_wf].exist = false;
                 distance++;
             } else {
                 if (M_exist && !GAP_exist) {
                     next_M(M_wavefronts, curr_wf, active_working_set_size, x,
                            text, pattern, tlen, plen,
                            last_free_bt_position, offloaded_backtraces);
+                    D_wavefronts[curr_wf].exist = false;
+                    I_wavefronts[curr_wf].exist = false;
                 } else {
                     next_MDI(
                         M_wavefronts, I_wavefronts, D_wavefronts,

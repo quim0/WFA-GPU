@@ -1,3 +1,5 @@
+SM=80
+COMPUTE=$(SM)
 CC=gcc
 NVCC=nvcc
 SRC_PATH=lib
@@ -9,7 +11,7 @@ SRC_TEST=$(wildcard tests/test_*.cu)
 ARGS=-I . -Ilib/
 ARGS_ALIGNER=-Lbuild/ -L/usr/local/cuda/lib64 $(ARGS)
 ARGS_WFA_CPU=-Lexternal/WFA/build/ $(ARGS) -Iexternal/WFA/ -lwfa
-NVCC_OPTIONS=-gencode arch=compute_80,code=sm_80 -Xcompiler -fopenmp
+NVCC_OPTIONS=-gencode arch=compute_$(COMPUTE),code=sm_$(SM) -Xcompiler -fopenmp
 
 aligner: wfa-cpu wfa-gpu-so $(SRC_ALIGNER)
 	mkdir -p bin
@@ -32,11 +34,11 @@ tests: test-packing test-alignment
 	mkdir -p bin
 	mv $^ bin/
 
-test-packing: tests/test_packing_kernel.cu wfa-gpu-so
-	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS_ALIGNER) utils/verification.c $< -lwfagpu -o $@
+test-packing: tests/test_packing_kernel.cu wfa-cpu wfa-gpu-so
+	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS_ALIGNER) utils/verification.c $< -lwfagpu $(ARGS_WFA_CPU) -o $@
 
-test-alignment: tests/test_alignment_kernel.cu wfa-gpu-so
-	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS_ALIGNER) $< utils/verification.c -lwfagpu -o $@
+test-alignment: tests/test_alignment_kernel.cu wfa-cpu wfa-gpu-so
+	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS_ALIGNER) $< utils/verification.c -lwfagpu $(ARGS_WFA_CPU) -o $@
 
 wfa-gpu-so: $(SRC_LIB)
 	mkdir -p build

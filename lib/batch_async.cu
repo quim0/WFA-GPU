@@ -67,7 +67,7 @@ void launch_alignments_batched (const char* sequences_buffer,
     // is possible to have only one buffer for the sequences
     char *d_seq_buffer_unpacked;
     size_t mem_needed_unpacked = sequences_metadata[batch_size-1].text_offset +
-                                 sequences_metadata[batch_size-1].text_offset + 1;
+                                 sequences_metadata[batch_size-1].text_len + 1;
     // Make the buffer 20% bigger to have some extra room in case next batch
     // have slightly bigger sequences
     mem_needed_unpacked *= 1.2;
