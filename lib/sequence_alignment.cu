@@ -30,7 +30,7 @@ void allocate_offloaded_bt_d (wfa_backtrace_t** bt_offloaded_d,
                               const size_t num_alignments) {
     size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(max_steps);
 
-    if (bt_offloaded_size >= (1L<<wfa_backtrace_bits)) {
+    if (bt_offloaded_size >= (1ULL<<(wfa_backtrace_bits-1))) {
         LOG_ERROR("Trying to allocate more backtrace elements than the ones"
                   " that we can address")
         exit(-1);
@@ -80,14 +80,10 @@ void allocate_wf_data_buffer_d (uint8_t** wf_data_buffer,
     // Create the active working set buffer on global memory
     const int max_wf_size = 2 * max_steps + 1;
     const int active_working_set = max(penalties.o+penalties.e, penalties.x) + 1;
-    int offsets_elements = active_working_set * max_wf_size;
-    offsets_elements = offsets_elements + (4 - (offsets_elements % 4));
-    const int bt_elements = offsets_elements;
-    size_t wf_data_buffer_size =
-                    // Offsets space
-                    (offsets_elements * 3 * sizeof(wfa_offset_t))
-                    // Backtraces space
-                    + (bt_elements * 3 * sizeof(wfa_backtrace_t));
+    size_t cells_elements = active_working_set * max_wf_size;
+    cells_elements = cells_elements + (4 - (cells_elements % 4));
+
+    size_t wf_data_buffer_size = cells_elements * 3 * sizeof(wfa_cell_t);
     wf_data_buffer_size *= num_alignments;
 
     LOG_DEBUG("Allocating %f MiB to store working set data of %zu alignments.",
@@ -106,14 +102,11 @@ void reset_wf_data_buffer_d (uint8_t* wf_data_buffer,
     // Create the active working set buffer on global memory
     const int max_wf_size = 2 * max_steps + 1;
     const int active_working_set = max(penalties.o+penalties.e, penalties.x) + 1;
-    int offsets_elements = active_working_set * max_wf_size;
-    offsets_elements = offsets_elements + (4 - (offsets_elements % 4));
-    const int bt_elements = offsets_elements;
-    size_t wf_data_buffer_size =
-                    // Offsets space
-                    (offsets_elements * 3 * sizeof(wfa_offset_t))
-                    // Backtraces space
-                    + (bt_elements * 3 * sizeof(wfa_backtrace_t));
+
+    size_t cells_elements = active_working_set * max_wf_size;
+    cells_elements = cells_elements+ (4 - (cells_elements % 4));
+
+    size_t wf_data_buffer_size = cells_elements * 3 * sizeof(wfa_cell_t);
     wf_data_buffer_size *= num_alignments;
 
     cudaMemsetAsync(wf_data_buffer, 0, wf_data_buffer_size, stream);
@@ -141,11 +134,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                                               + bt_offloaded_size;
 
     // TODO: Reduction of penalties
-    const int max_wf_size = 2 * max_steps + 1;
     const int active_working_set = max(penalties.o+penalties.e, penalties.x) + 1;
-    int offsets_elements = active_working_set * max_wf_size;
-    offsets_elements = offsets_elements + (4 - (offsets_elements % 4));
-
 
     size_t sh_mem_size = \
                     // Wavefronts structs space

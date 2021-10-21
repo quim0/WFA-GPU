@@ -25,12 +25,28 @@
 #include "stdint.h"
 
 typedef int32_t wfa_offset_t;
+typedef uint32_t wfa_bt_prev_t;
+typedef uint64_t wfa_bt_vector_t;
 
-#define wfa_backtrace_bits 32
+#define wfa_backtrace_bits 64
 typedef struct {
-    uint32_t backtrace;
-    uint32_t prev;
+    wfa_bt_vector_t backtrace;
+    wfa_bt_prev_t prev;
 } wfa_backtrace_t;
+
+// ! DO NOT CHANGE THE ORDER OF STRUCT MEMBERS !
+// The current order is assumed for doing 128 bit loads from global memory on
+// the GPU.
+#ifdef __CUDACC__
+typedef __align__(16) struct
+#else
+typedef struct
+#endif
+{
+    wfa_offset_t offset;       // 32 bits
+    wfa_bt_prev_t bt_prev;     // 32 bits
+    wfa_bt_vector_t bt_vector; // 64 bits
+} wfa_cell_t;
 
 typedef enum {
     OP_INS = 1,

@@ -21,7 +21,6 @@
 
 #include "utils/verification.h"
 #include "utils/logger.h"
-#include "tests/test.h"
 #include <string.h>
 
 bool check_cigar_edit (const char* text,
@@ -68,7 +67,6 @@ bool check_cigar_edit (const char* text,
 				++text_pos;
 				break;
 			default:
-				//TEST_FAIL("Invalid CIGAR generated.\n");
 				break;
 		}
 	}
@@ -138,7 +136,6 @@ bool check_affine_distance (const char* text,
                 break;
             default:
                 LOG_ERROR("Incorrect cigar generated")
-                //TEST_ASSERT(false);
         }
     }
 
@@ -211,7 +208,7 @@ char* recover_cigar (const char* text,
     while (iterations > 0) {
 
         wfa_backtrace_t* backtrace = &offloaded_backtraces_array[iterations - 1];
-        uint32_t backtrace_val = backtrace->backtrace;
+        wfa_bt_vector_t backtrace_val = backtrace->backtrace;
 
         int steps = OPS_PER_BT_WORD - (__builtin_clz(backtrace_val) / 2);
 
@@ -273,7 +270,7 @@ char* recover_cigar (const char* text,
 
     // Final round with the final backtrace word that is not in the offlaoded
     // array
-    uint32_t backtrace_val = final_backtrace.backtrace;
+    wfa_bt_vector_t backtrace_val = final_backtrace.backtrace;
 
     int steps = OPS_PER_BT_WORD - (__builtin_clz(backtrace_val) / 2);
 

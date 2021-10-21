@@ -29,7 +29,7 @@
 #include "affine_penalties.h"
 #include "alignment_results.h"
 
-#define OPS_PER_BT_WORD 16
+#define OPS_PER_BT_WORD 32
 
 #define EWAVEFRONT_V(k,offset) ((offset)-(k))
 #define EWAVEFRONT_H(k,offset) (offset)
