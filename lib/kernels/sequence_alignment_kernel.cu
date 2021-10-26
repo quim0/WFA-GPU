@@ -564,13 +564,13 @@ __device__ void update_curr_wf (wfa_wavefront_t* M_wavefronts,
     // Set new wf to NULL, as new wavefront may be smaller than the
     // previous one
     //wfa_offset_t* to_clean_M = M_wavefronts[wf_idx].offsets - (max_wf_size/2);
-    M_wavefronts[wf_idx].exist = false;
+    //M_wavefronts[wf_idx].exist = false;
 
     //wfa_offset_t* to_clean_I = I_wavefronts[wf_idx].offsets - (max_wf_size/2);
-    I_wavefronts[wf_idx].exist = false;
+    //I_wavefronts[wf_idx].exist = false;
 
     //wfa_offset_t* to_clean_D = D_wavefronts[wf_idx].offsets - (max_wf_size/2);
-    D_wavefronts[wf_idx].exist = false;
+    //D_wavefronts[wf_idx].exist = false;
 
     //for (int i=threadIdx.x; i<max_wf_size; i+=blockDim.x) {
     //    to_clean_M[i] = -1;
@@ -676,7 +676,7 @@ __global__ void alignment_kernel (
 
     // TODO: Is this necessary? As thread 0 sets curr_wf[0] AND does the first
     // extend.
-    __syncthreads();
+    //__syncthreads();
 
     int curr_wf = 0;
 
@@ -725,7 +725,7 @@ __global__ void alignment_kernel (
 
         distance++;
         steps++;
-        __syncthreads();
+        //__syncthreads();
 
         while (steps < (max_steps - 1)) {
             bool M_exist = false;
@@ -792,14 +792,12 @@ __global__ void alignment_kernel (
             max_wf_size,
             &curr_wf);
 
-        __syncthreads();
+        //__syncthreads();
         }
     } else {
         finished = true;
     }
 
-    // TODO: Remove
-    __syncthreads();
     if  (tid == 0) {
         results[blockIdx.x].distance = distance;
         results[blockIdx.x].finished = finished;
