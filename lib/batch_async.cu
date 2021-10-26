@@ -66,6 +66,7 @@ void launch_alignments_batched (const char* sequences_buffer,
     // same sequence length, this may not be the case, but with this assumption
     // is possible to have only one buffer for the sequences
     char *d_seq_buffer_unpacked;
+    char *h_seq_buffer_unpacked;
     size_t mem_needed_unpacked = sequences_metadata[batch_size-1].text_offset +
                                  sequences_metadata[batch_size-1].text_offset + 1;
     // Make the buffer 20% bigger to have some extra room in case next batch
@@ -76,6 +77,9 @@ void launch_alignments_batched (const char* sequences_buffer,
               (float(mem_needed_unpacked) / (1<<20)));
 
     cudaMalloc(&d_seq_buffer_unpacked, mem_needed_unpacked);
+    CUDA_CHECK_ERR
+    // Allocated pinned memory on host
+    cudaMallocHost(&h_seq_buffer_unpacked, mem_needed_unpacked);
     CUDA_CHECK_ERR
 
     char *d_seq_buffer_packed;
@@ -110,10 +114,13 @@ void launch_alignments_batched (const char* sequences_buffer,
     CUDA_CHECK_ERR
 
     sequence_pair_t *d_seq_metadata;
+    sequence_pair_t *h_seq_metadata;
     size_t mem_needed_metadata = batch_size * sizeof(sequence_pair_t);
     LOG_DEBUG("Allocating %.2f MiB to store the packed sequences metadata on "
               "the device.", float(mem_needed_metadata) / (1<<20));
     cudaMalloc(&d_seq_metadata, mem_needed_metadata);
+    CUDA_CHECK_ERR
+    cudaMallocHost(&h_seq_metadata, mem_needed_metadata);
     CUDA_CHECK_ERR
 
     LOG_DEBUG("Aligning %zu alignments using %d batchs of %zu elements.",
@@ -123,13 +130,17 @@ void launch_alignments_batched (const char* sequences_buffer,
     size_t bytes_to_copy_seqs = bytes_to_copy_unpacked(0, batch_size - 1,
                                                        sequences_metadata);
     const char *initial_seq = &sequences_buffer[sequences_metadata[0].pattern_offset];
-    cudaMemcpyAsync(d_seq_buffer_unpacked, initial_seq, bytes_to_copy_seqs,
+    memcpy(h_seq_buffer_unpacked, initial_seq, bytes_to_copy_seqs);
+    cudaMemcpyAsync(d_seq_buffer_unpacked, h_seq_buffer_unpacked, bytes_to_copy_seqs,
                     cudaMemcpyHostToDevice, stream1);
     CUDA_CHECK_ERR
 
     // Results of the alignments
     alignment_result_t *results_d;
+    alignment_result_t *results_h;
     cudaMalloc(&results_d, batch_size * sizeof(alignment_result_t));
+    CUDA_CHECK_ERR
+    cudaMallocHost(&results_h, batch_size * sizeof(alignment_result_t));
     CUDA_CHECK_ERR
 
     // Space for the kernel to store the offloaded backtraces on the GPU, this
@@ -142,6 +153,13 @@ void launch_alignments_batched (const char* sequences_buffer,
     allocate_wf_data_buffer_d(&wf_data_buffer, max_distance,
                               penalties, batch_size);
 
+    // Pinned memory region on host to store the backtrace chain result for each
+    // alignment in the batch
+    uint32_t bt_result_offloaded_size = BT_OFFLOADED_RESULT_ELEMENTS(max_distance);
+    wfa_backtrace_t* bt_results_offloaded_h;
+    cudaMallocHost(&bt_results_offloaded_h,
+                   batch_size * bt_result_offloaded_size * sizeof(wfa_backtrace_t));
+
     for (int batch=0; batch < num_batchs; batch++) {
         const int from = batch * batch_size;
         const int to = (batch == (num_batchs-1))
@@ -149,7 +167,10 @@ void launch_alignments_batched (const char* sequences_buffer,
         const int curr_batch_size = to - from + 1;
 
         // Copy metadata of current batch
-        cudaMemcpyAsync(d_seq_metadata, &sequences_metadata[from],
+        memcpy(h_seq_metadata,
+              &sequences_metadata[from],
+              curr_batch_size * sizeof(sequence_pair_t));
+        cudaMemcpyAsync(d_seq_metadata, h_seq_metadata,
                         curr_batch_size * sizeof(sequence_pair_t),
                         cudaMemcpyHostToDevice, stream1);
         CUDA_CHECK_ERR
@@ -171,6 +192,24 @@ void launch_alignments_batched (const char* sequences_buffer,
         // unpacked sequences to the device
         cudaStreamSynchronize(stream1);
 
+        // TODO: max_distance = max_steps (?)
+        // Align current batch
+        launch_alignments_async(
+            d_seq_buffer_packed,
+            d_seq_metadata,
+            curr_batch_size,
+            penalties,
+            results_h,
+            bt_results_offloaded_h,
+            results_d,
+            bt_offloaded_d,
+            wf_data_buffer,
+            max_distance,
+            threads_per_block,
+            stream2
+        );
+
+
         // Copy unpacked sequences of next batch while the alignment kernel is
         // running. Don't do it in the final batch as there is no next batch in
         // that case.
@@ -181,8 +220,10 @@ void launch_alignments_batched (const char* sequences_buffer,
             bytes_to_copy_seqs = bytes_to_copy_unpacked(next_from, next_to,
                                                         sequences_metadata);
             initial_seq = &sequences_buffer[sequences_metadata[next_from].pattern_offset];
-            cudaMemcpyAsync(d_seq_buffer_unpacked, initial_seq, bytes_to_copy_seqs,
-                            cudaMemcpyHostToDevice, stream1);
+            memcpy(h_seq_buffer_unpacked, initial_seq, bytes_to_copy_seqs);
+            cudaMemcpyAsync(d_seq_buffer_unpacked, h_seq_buffer_unpacked,
+                            bytes_to_copy_seqs, cudaMemcpyHostToDevice,
+                            stream1);
             CUDA_CHECK_ERR
 
             size_t next_batch_size = next_to - next_from + 1;
@@ -204,23 +245,6 @@ void launch_alignments_batched (const char* sequences_buffer,
             }
         }
 
-        // TODO: max_distance = max_steps (?)
-        // Align current batch
-        launch_alignments_async(
-            d_seq_buffer_packed,
-            d_seq_metadata,
-            curr_batch_size,
-            penalties,
-            results,
-            backtraces,
-            results_d,
-            bt_offloaded_d,
-            wf_data_buffer,
-            max_distance,
-            threads_per_block,
-            stream2
-        );
-
         // Make sure that alignment kernel has finished before packing the next
         // batch sequences
         cudaStreamSynchronize(stream2);
@@ -230,7 +254,7 @@ void launch_alignments_batched (const char* sequences_buffer,
         int alignments_computed_cpu = 0;
         for (int i=0; i<curr_batch_size; i++) {
             int real_i = i + from;
-            if (!results[i].finished) {
+            if (!results_h[i].finished) {
                 alignments_computed_cpu++;
 
                 size_t toffset = sequences_metadata[real_i].text_offset;
@@ -242,7 +266,7 @@ void launch_alignments_batched (const char* sequences_buffer,
                 size_t tlen = sequences_metadata[real_i].text_len;
                 size_t plen = sequences_metadata[real_i].pattern_len;
 
-                results[i].distance = compute_alignment_cpu(
+                results_h[i].distance = compute_alignment_cpu(
                     pattern, text,
                     plen, tlen,
                     penalties.x, penalties.o, penalties.e
@@ -256,8 +280,10 @@ void launch_alignments_batched (const char* sequences_buffer,
             LOG_INFO("(Batch %d) %d/%d alignemnts could not be computed on the"
                      " GPU and where offloaded to the CPU.",
                      batch, alignments_computed_cpu, curr_batch_size)
-            // TODO: Make the computations on the CPU using the WFA library
         }
+
+        memcpy(&results[from], results_h, curr_batch_size * sizeof(alignment_result_t));
+        memcpy(&backtraces[from], bt_results_offloaded_h, curr_batch_size * bt_result_offloaded_size * sizeof(wfa_backtrace_t));
 
         // TODO: check correctness/ recover cigar from previous batch while the
         // kernel from current batch is running (?)
@@ -274,9 +300,9 @@ void launch_alignments_batched (const char* sequences_buffer,
             #pragma omp parallel for reduction(+:avg_distance,correct,incorrect)
             for (int i=from; i<=to; i++) {
                 // TODO: Check also CPU distances ?
-                if (!results[i-from].finished) {
+                if (!results_h[i-from].finished) {
                     correct++;
-                    avg_distance += results[i-from].distance;
+                    avg_distance += results_h[i-from].distance;
                     continue;
                 }
 
@@ -289,11 +315,11 @@ void launch_alignments_batched (const char* sequences_buffer,
                 size_t tlen = sequences_metadata[i].text_len;
                 size_t plen = sequences_metadata[i].pattern_len;
 
-                int distance = results[i-from].distance;
+                int distance = results_h[i-from].distance;
                 char* cigar = recover_cigar(text, pattern, tlen,
-                                            plen, results[i-from].backtrace,
-                                            backtraces + backtraces_offloaded_elements*(i-from),
-                                            results[i-from]);
+                                            plen, results_h[i-from].backtrace,
+                                            bt_results_offloaded_h + backtraces_offloaded_elements*(i-from),
+                                            results_h[i-from]);
 
                 bool correct_cigar = check_cigar_edit(text, pattern, tlen, plen, cigar);
                 bool correct_affine_d = check_affine_distance(text, pattern, tlen,
@@ -334,6 +360,11 @@ void launch_alignments_batched (const char* sequences_buffer,
     cudaFree(results_d);
     cudaFree(bt_offloaded_d);
     cudaFree(wf_data_buffer);
+    cudaFreeHost(h_seq_buffer_unpacked);
+    cudaFreeHost(h_seq_metadata);
+    cudaFreeHost(results_h);
+    cudaFreeHost(bt_results_offloaded_h);
+    CUDA_CHECK_ERR
 }
 
 extern "C" void launch_alignments (const char* sequences_buffer,
