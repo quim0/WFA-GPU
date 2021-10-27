@@ -40,6 +40,7 @@ void launch_alignments_batched (const char* sequences_buffer,
                         wfa_backtrace_t* backtraces,
                         const int max_distance,
                         const int threads_per_block,
+                        const int num_blocks,
                         size_t batch_size,
                         bool check_correctness);
 
@@ -47,6 +48,7 @@ void launch_alignments_batched (const char* sequences_buffer,
 }
 #endif
 
+/*
 void launch_alignments (const char* sequences_buffer,
                          const size_t sequences_buffer_size,
                          const sequence_pair_t* sequences_metadata,
@@ -56,6 +58,6 @@ void launch_alignments (const char* sequences_buffer,
                          wfa_backtrace_t* backtraces,
                          const int max_distance,
                          const int threads_per_block);
-
+*/
 
 #endif

@@ -27,6 +27,7 @@
 
 void allocate_offloaded_bt_d (wfa_backtrace_t** bt_offloaded_d,
                               const int max_steps,
+                              const int num_blocks,
                               const size_t num_alignments) {
     size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(max_steps);
 
@@ -36,15 +37,15 @@ void allocate_offloaded_bt_d (wfa_backtrace_t** bt_offloaded_d,
         exit(-1);
     }
 
-    bt_offloaded_size *= num_alignments;
+    bt_offloaded_size *= num_blocks;
 
     // Add the results array
     size_t bt_offloaded_results_size = BT_OFFLOADED_RESULT_ELEMENTS(max_steps)
                                        * num_alignments;
 
-    LOG_DEBUG("Allocating %f MiB to store backtraces of %zu alignments.",
+    LOG_DEBUG("Allocating %f MiB to store backtraces of %zu alignments using %d blocks.",
               (float)((bt_offloaded_size + bt_offloaded_results_size) * sizeof(wfa_backtrace_t)) / (1 << 20),
-              num_alignments)
+              num_alignments, num_blocks)
 
     cudaMalloc(bt_offloaded_d,
                (bt_offloaded_size + bt_offloaded_results_size) * sizeof(wfa_backtrace_t));
@@ -52,12 +53,12 @@ void allocate_offloaded_bt_d (wfa_backtrace_t** bt_offloaded_d,
 }
 
 void reset_offloaded_bt_d (wfa_backtrace_t* bt_offloaded_d,
-                              const int max_steps,
-                              const size_t num_alignments,
-                              cudaStream_t stream) {
+                           const int max_steps,
+                           const int num_blocks,
+                           const size_t num_alignments,
+                           cudaStream_t stream) {
     size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(max_steps);
-
-    bt_offloaded_size *= num_alignments;
+    bt_offloaded_size *= num_blocks;
 
     // Add the results array
     size_t bt_offloaded_results_size = BT_OFFLOADED_RESULT_ELEMENTS(max_steps)
@@ -72,44 +73,44 @@ void reset_offloaded_bt_d (wfa_backtrace_t* bt_offloaded_d,
     CUDA_CHECK_ERR
 }
 
-void allocate_wf_data_buffer_d (uint8_t** wf_data_buffer,
-                                const size_t max_steps,
-                                const affine_penalties_t penalties,
-                                const size_t num_alignments) {
-
-    // Create the active working set buffer on global memory
+size_t wf_data_buffer_size (const affine_penalties_t penalties,
+                             const size_t max_steps) {
     const int max_wf_size = 2 * max_steps + 1;
     const int active_working_set = max(penalties.o+penalties.e, penalties.x) + 1;
     size_t cells_elements = active_working_set * max_wf_size;
     cells_elements = cells_elements + (4 - (cells_elements % 4));
 
-    size_t wf_data_buffer_size = cells_elements * 3 * sizeof(wfa_cell_t);
-    wf_data_buffer_size *= num_alignments;
+    return cells_elements * 3 * sizeof(wfa_cell_t);
+}
 
-    LOG_DEBUG("Allocating %f MiB to store working set data of %zu alignments.",
-              (float)(wf_data_buffer_size) / (1 << 20), num_alignments)
+void allocate_wf_data_buffer_d (uint8_t** wf_data_buffer,
+                                const size_t max_steps,
+                                const affine_penalties_t penalties,
+                                const size_t num_blocks) {
+    // Create the active working set buffer on global memory
+    size_t buffer_size = wf_data_buffer_size(penalties, max_steps) * num_blocks;
 
-    cudaMalloc(wf_data_buffer, wf_data_buffer_size);
+    // Add a single int to be the global index of the next alignment in the pool
+    buffer_size += sizeof(uint32_t);
+
+    LOG_DEBUG("Allocating %f MiB to store working set data of %zu blocks.",
+              (float)(buffer_size) / (1 << 20), num_blocks)
+
+    cudaMalloc(wf_data_buffer, buffer_size);
     CUDA_CHECK_ERR;
 }
 
 void reset_wf_data_buffer_d (uint8_t* wf_data_buffer,
                              const size_t max_steps,
                              const affine_penalties_t penalties,
-                             const size_t num_alignments,
+                             const size_t num_blocks,
                              cudaStream_t stream) {
 
     // Create the active working set buffer on global memory
-    const int max_wf_size = 2 * max_steps + 1;
-    const int active_working_set = max(penalties.o+penalties.e, penalties.x) + 1;
+    size_t buffer_size = wf_data_buffer_size(penalties, max_steps) * num_blocks;
+    buffer_size += sizeof(uint32_t);
 
-    size_t cells_elements = active_working_set * max_wf_size;
-    cells_elements = cells_elements+ (4 - (cells_elements % 4));
-
-    size_t wf_data_buffer_size = cells_elements * 3 * sizeof(wfa_cell_t);
-    wf_data_buffer_size *= num_alignments;
-
-    cudaMemsetAsync(wf_data_buffer, 0, wf_data_buffer_size, stream);
+    cudaMemsetAsync(wf_data_buffer, 0, buffer_size, stream);
     CUDA_CHECK_ERR;
 }
 
@@ -124,9 +125,10 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                               uint8_t* const wf_data_buffer,
                               const int max_steps,
                               const int threads_per_block,
+                              const int num_blocks,
                               cudaStream_t stream) {
 
-    size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(max_steps) * num_alignments;
+    size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(max_steps) * num_blocks;
     size_t bt_offloaded_results_size = BT_OFFLOADED_RESULT_ELEMENTS(max_steps)
                                        * num_alignments;
 
@@ -143,8 +145,13 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                     // backtraces. It will be atomically increased.
                     + sizeof(int);
 
-    // TODO
-    dim3 gridSize(num_alignments);
+    uint32_t* next_alignment_idx = (uint32_t*)(bt_offloaded_d
+                                               + wf_data_buffer_size(
+                                                   penalties,
+                                                   max_steps
+                                               ));
+
+    dim3 gridSize(num_blocks);
     dim3 blockSize(threads_per_block);
 
     LOG_DEBUG("Launching %d blocks of %d threads with %.2fKiB of shared memory",
@@ -162,7 +169,8 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                                               penalties,
                                               bt_offloaded_d,
                                               bt_offloaded_results_d,
-                                              results_d);
+                                              results_d,
+                                              next_alignment_idx);
     CUDA_CHECK_ERR
 
     // TODO: Unify results and backtraces memory buffers to do a signle memcpy
@@ -173,6 +181,4 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                bt_offloaded_results_size * sizeof(wfa_backtrace_t),
                cudaMemcpyDeviceToHost, stream);
     CUDA_CHECK_ERR
-
-    // TODO: CUDAFREE
 }

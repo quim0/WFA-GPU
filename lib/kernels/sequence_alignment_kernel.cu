@@ -582,6 +582,11 @@ __device__ void update_curr_wf (wfa_wavefront_t* M_wavefronts,
 
 }
 
+__device__ uint32_t get_alignment_idx (uint32_t* const next_alignment_idx) {
+    uint32_t old_val = atomicAdd(next_alignment_idx, 1);
+    return old_val;
+}
+
 __global__ void alignment_kernel (
                             const char* packed_sequences_buffer,
                             const sequence_pair_t* sequences_metadata,
@@ -591,30 +596,26 @@ __global__ void alignment_kernel (
                             const affine_penalties_t penalties,
                             wfa_backtrace_t* offloaded_backtraces_global,
                             wfa_backtrace_t* offloaded_backtraces_results,
-                            alignment_result_t* results) {
+                            alignment_result_t* results,
+                            uint32_t* const next_alignment_idx) {
     const int tid = threadIdx.x;
     // m = 0 for WFA
     const int x = penalties.x;
     const int o = penalties.o;
     const int e = penalties.e;
 
-    const sequence_pair_t curr_batch_alignment_base = sequences_metadata[0];
-    const size_t base_offset_packed = curr_batch_alignment_base.pattern_offset_packed;
+    __shared__ uint32_t alignment_idx;
 
-    const sequence_pair_t metadata = sequences_metadata[blockIdx.x];
-    const char* text = packed_sequences_buffer + metadata.text_offset_packed - base_offset_packed;
-    const char* pattern = packed_sequences_buffer + metadata.pattern_offset_packed - base_offset_packed ;
-    const int tlen = metadata.text_len;
-    const int plen = metadata.pattern_len;
+    // Get the first alignment to compute from the alignments pool
+    if (tid == 0) alignment_idx = get_alignment_idx(next_alignment_idx);
 
-    // TODO: Move to function/macro + use in lib/sequence_alignment.cu
+    __syncthreads();
+
     size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(max_steps);
     wfa_backtrace_t* const offloaded_backtraces = \
              &offloaded_backtraces_global[blockIdx.x * bt_offloaded_size];
 
     size_t bt_results_size = BT_OFFLOADED_RESULT_ELEMENTS(max_steps);
-    wfa_backtrace_t* const offloaded_backtrace_results_base = \
-             &offloaded_backtraces_results[blockIdx.x * bt_results_size];
 
     // In shared memory:
     // - Wavefronts needed to calculate current WF_s, there are 3 "pyramids" so
@@ -647,181 +648,193 @@ __global__ void alignment_kernel (
     uint32_t* last_free_bt_position = (uint32_t*)
                                           (D_wavefronts + active_working_set_size);
 
-    // Start at 1 because 0 is used as NULL (no more backtraces blocks to
-    // recover)
-    *last_free_bt_position = 1;
+    // Iterate until there are no more alignments in the pool to compute
+    while (alignment_idx < num_alignments) {
+        const sequence_pair_t curr_batch_alignment_base = sequences_metadata[0];
+        const size_t base_offset_packed = curr_batch_alignment_base.pattern_offset_packed;
 
-    // Initialize all wavefronts to -1
-    for (int i=tid; i<(cells_size * 3); i+=blockDim.x) {
-        STORE_CELL(M_base[i], (uint32_t)-10000, 0L, 0);
-    }
+        const sequence_pair_t metadata = sequences_metadata[alignment_idx];
+        const char* text = packed_sequences_buffer + metadata.text_offset_packed - base_offset_packed;
+        const char* pattern = packed_sequences_buffer + metadata.pattern_offset_packed - base_offset_packed ;
+        const int tlen = metadata.text_len;
+        const int plen = metadata.pattern_len;
 
-    // Initialize wavefronts memory
-    for (int i=tid; i<active_working_set_size; i+=blockDim.x) {
-        M_wavefronts[i].cells = M_base + (i * max_wf_size) + (max_wf_size/2);
-        M_wavefronts[i].hi = 0;
-        M_wavefronts[i].lo = 0;
-        M_wavefronts[i].exist = false;
+        wfa_backtrace_t* const offloaded_backtrace_results_base = \
+                 &offloaded_backtraces_results[alignment_idx * bt_results_size];
 
-        I_wavefronts[i].cells = I_base + (i * max_wf_size) + (max_wf_size/2);
-        I_wavefronts[i].hi = 0;
-        I_wavefronts[i].lo = 0;
-        I_wavefronts[i].exist = false;
+        // Start at 1 because 0 is used as NULL (no more backtraces blocks to
+        // recover)
+        *last_free_bt_position = 1;
 
-        D_wavefronts[i].cells = D_base + (i * max_wf_size) + (max_wf_size/2);
-        D_wavefronts[i].hi = 0;
-        D_wavefronts[i].lo = 0;
-        D_wavefronts[i].exist = false;
-    }
+        // Initialize all wavefronts to NULL
+        for (int i=tid; i<(cells_size * 3); i+=blockDim.x) {
+            STORE_CELL(M_base[i], (uint32_t)-10000, 0L, 0);
+        }
 
-    // TODO: Is this necessary? As thread 0 sets curr_wf[0] AND does the first
-    // extend.
-    //__syncthreads();
+        // Initialize wavefronts memory
+        for (int i=tid; i<active_working_set_size; i+=blockDim.x) {
+            M_wavefronts[i].cells = M_base + (i * max_wf_size) + (max_wf_size/2);
+            M_wavefronts[i].hi = 0;
+            M_wavefronts[i].lo = 0;
+            M_wavefronts[i].exist = false;
 
-    int curr_wf = 0;
+            I_wavefronts[i].cells = I_base + (i * max_wf_size) + (max_wf_size/2);
+            I_wavefronts[i].hi = 0;
+            I_wavefronts[i].lo = 0;
+            I_wavefronts[i].exist = false;
 
-    if (tid == 0) {
-        wfa_offset_t initial_ext = WF_extend_kernel(
-            text,
-            pattern,
-            tlen, plen,
-            0, 0);
+            D_wavefronts[i].cells = D_base + (i * max_wf_size) + (max_wf_size/2);
+            D_wavefronts[i].hi = 0;
+            D_wavefronts[i].lo = 0;
+            D_wavefronts[i].exist = false;
+        }
 
-        STORE_CELL(
-            M_wavefronts[curr_wf].cells[0],
-            initial_ext, // Offset
-            0L,          // Backtrace vector
-            0);          // Previous backtrace block
+        // Sync is not necessary as thread 0 sets curr_wf[0] AND does the first
+        // extend.
 
-        M_wavefronts[curr_wf].exist = true;
-    }
+        int curr_wf = 0;
 
-    __syncthreads();
+        if (tid == 0) {
+            wfa_offset_t initial_ext = WF_extend_kernel(
+                text,
+                pattern,
+                tlen, plen,
+                0, 0);
 
-    // TODO: Change tarket K if we don't start form WF 0 (cooperative strategy)
-    const int target_k = EWAVEFRONT_DIAGONAL(tlen, plen);
-    const int target_k_abs = (target_k >= 0) ? target_k : -target_k;
-    const wfa_offset_t target_offset = EWAVEFRONT_OFFSET(tlen, plen);
+            STORE_CELL(
+                M_wavefronts[curr_wf].cells[0],
+                initial_ext, // Offset
+                0L,          // Backtrace vector
+                0);          // Previous backtrace block
 
-    bool finished = false;
+            M_wavefronts[curr_wf].exist = true;
+        }
 
-    int distance = 0;
-    // steps = number of editions
-    int steps = 0;
-    // TODO: target_k_abs <= distance or <= steps (?)
-    uint4 target_cell = LOAD_CELL(M_wavefronts[curr_wf].cells[target_k]);
-    wfa_offset_t curr_target_offset = UINT4_TO_OFFSET(target_cell);
-    if (!(target_k_abs <= distance
-            && M_wavefronts[curr_wf].exist
-            && curr_target_offset == target_offset)) {
+        __syncthreads();
 
-        update_curr_wf(
-            M_wavefronts,
-            I_wavefronts,
-            D_wavefronts,
-            active_working_set_size,
-            max_wf_size,
-            &curr_wf);
+        const int target_k = EWAVEFRONT_DIAGONAL(tlen, plen);
+        const int target_k_abs = (target_k >= 0) ? target_k : -target_k;
+        const wfa_offset_t target_offset = EWAVEFRONT_OFFSET(tlen, plen);
 
-        distance++;
-        steps++;
-        //__syncthreads();
+        bool finished = false;
 
-        while (steps < (max_steps - 1)) {
-            bool M_exist = false;
-            bool GAP_exist = false;
-            const int o_delta = (curr_wf + o + e) % active_working_set_size;
-            const int e_delta = (curr_wf + e) % active_working_set_size;
-            const int x_delta = (curr_wf + x) % active_working_set_size;
-            if ((distance - o - e) >= 0) {
-                // Just test with I because I and D exist in the same distances
-                GAP_exist = M_wavefronts[o_delta].exist
-                          || I_wavefronts[e_delta].exist;
-            }
+        int distance = 0;
+        // steps = number of editions
+        int steps = 0;
+        // TODO: target_k_abs <= distance or <= steps (?)
+        uint4 target_cell = LOAD_CELL(M_wavefronts[curr_wf].cells[target_k]);
+        wfa_offset_t curr_target_offset = UINT4_TO_OFFSET(target_cell);
+        if (!(target_k_abs <= distance
+                && M_wavefronts[curr_wf].exist
+                && curr_target_offset == target_offset)) {
 
-            if (GAP_exist) {
-                M_exist = true;
-            } else {
-                if ((distance - x) >= 0) {
-                    M_exist = M_wavefronts[x_delta].exist;
-                } 
-            }
+            update_curr_wf(
+                M_wavefronts,
+                I_wavefronts,
+                D_wavefronts,
+                active_working_set_size,
+                max_wf_size,
+                &curr_wf);
 
-            if (!GAP_exist && !M_exist) {
-                distance++;
-            } else {
-                if (M_exist && !GAP_exist) {
-                    next_M(M_wavefronts, I_wavefronts, D_wavefronts, curr_wf, active_working_set_size, x,
-                           text, pattern, tlen, plen,
-                           last_free_bt_position, offloaded_backtraces);
+            distance++;
+            steps++;
+
+            while (steps < (max_steps - 1)) {
+                bool M_exist = false;
+                bool GAP_exist = false;
+                const int o_delta = (curr_wf + o + e) % active_working_set_size;
+                const int e_delta = (curr_wf + e) % active_working_set_size;
+                const int x_delta = (curr_wf + x) % active_working_set_size;
+                if ((distance - o - e) >= 0) {
+                    // Just test with I because I and D exist in the same distances
+                    GAP_exist = M_wavefronts[o_delta].exist
+                              || I_wavefronts[e_delta].exist;
+                }
+
+                if (GAP_exist) {
+                    M_exist = true;
                 } else {
-                    next_MDI(
-                        M_wavefronts, I_wavefronts, D_wavefronts,
-                        curr_wf, active_working_set_size,
-                        x, o, e,
-                        text, pattern, tlen, plen,
-                        last_free_bt_position, offloaded_backtraces);
-
-                    // Wavefront only grows if there's an operation in the ~I or
-                    // ~D matrices
-                    steps++;
+                    if ((distance - x) >= 0) {
+                        M_exist = M_wavefronts[x_delta].exist;
+                    } 
                 }
 
-                // TODO: This is necessary for now, try to find a less sync
-                // version
-                __syncthreads();
+                if (!GAP_exist && !M_exist) {
+                    distance++;
+                } else {
+                    if (M_exist && !GAP_exist) {
+                        next_M(M_wavefronts, I_wavefronts, D_wavefronts, curr_wf, active_working_set_size, x,
+                               text, pattern, tlen, plen,
+                               last_free_bt_position, offloaded_backtraces);
+                    } else {
+                        next_MDI(
+                            M_wavefronts, I_wavefronts, D_wavefronts,
+                            curr_wf, active_working_set_size,
+                            x, o, e,
+                            text, pattern, tlen, plen,
+                            last_free_bt_position, offloaded_backtraces);
 
-                target_cell = LOAD_CELL(M_wavefronts[curr_wf].cells[target_k]);
-                curr_target_offset = UINT4_TO_OFFSET(target_cell);
+                        // Wavefront only grows if there's an operation in the ~I or
+                        // ~D matrices
+                        steps++;
+                    }
 
-                if (target_k_abs <= distance
-                        && M_exist
-                        && curr_target_offset == target_offset) {
-                    finished = true;
-                    break;
+                    __syncthreads();
+
+                    target_cell = LOAD_CELL(M_wavefronts[curr_wf].cells[target_k]);
+                    curr_target_offset = UINT4_TO_OFFSET(target_cell);
+
+                    if (target_k_abs <= distance
+                            && M_exist
+                            && curr_target_offset == target_offset) {
+                        finished = true;
+                        break;
+                    }
+
+                    distance++;
                 }
 
-                distance++;
+            update_curr_wf(
+                M_wavefronts,
+                I_wavefronts,
+                D_wavefronts,
+                active_working_set_size,
+                max_wf_size,
+                &curr_wf);
+            }
+        } else {
+            finished = true;
+        }
+
+        if  (tid == 0) {
+            results[alignment_idx].distance = distance;
+            results[alignment_idx].finished = finished;
+            target_cell = LOAD_CELL(M_wavefronts[curr_wf].cells[target_k]);
+            wfa_bt_vector_t backtrace_val = UINT4_TO_BT_VECTOR(target_cell);
+            wfa_bt_prev_t   prev          = UINT4_TO_BT_PREV(target_cell);
+            wfa_backtrace_t backtrace = {
+                .backtrace = backtrace_val,
+                .prev      = prev
+            };
+
+            results[alignment_idx].backtrace = backtrace;
+
+            wfa_backtrace_t* curr_result = &backtrace;
+
+            // Save the list in reversed order
+            int i = 0;
+            while (curr_result->prev != 0) {
+                offloaded_backtrace_results_base[i] = \
+                                            offloaded_backtraces[curr_result->prev];
+                curr_result = &offloaded_backtraces[curr_result->prev];
+                i++;
             }
 
-        update_curr_wf(
-            M_wavefronts,
-            I_wavefronts,
-            D_wavefronts,
-            active_working_set_size,
-            max_wf_size,
-            &curr_wf);
-
-        //__syncthreads();
-        }
-    } else {
-        finished = true;
-    }
-
-    if  (tid == 0) {
-        results[blockIdx.x].distance = distance;
-        results[blockIdx.x].finished = finished;
-        target_cell = LOAD_CELL(M_wavefronts[curr_wf].cells[target_k]);
-        wfa_bt_vector_t backtrace_val = UINT4_TO_BT_VECTOR(target_cell);
-        wfa_bt_prev_t   prev          = UINT4_TO_BT_PREV(target_cell);
-        wfa_backtrace_t backtrace = {
-            .backtrace = backtrace_val,
-            .prev      = prev
-        };
-
-        results[blockIdx.x].backtrace = backtrace;
-
-        wfa_backtrace_t* curr_result = &backtrace;
-
-        // Save the list in reversed order
-        int i = 0;
-        while (curr_result->prev != 0) {
-            offloaded_backtrace_results_base[i] = \
-                                        offloaded_backtraces[curr_result->prev];
-            curr_result = &offloaded_backtraces[curr_result->prev];
-            i++;
+            results[alignment_idx].num_bt_blocks = i;
         }
 
-        results[blockIdx.x].num_bt_blocks = i;
+        // Get next alignment
+        if (tid == 0) alignment_idx = get_alignment_idx(next_alignment_idx);
+        __syncthreads();
     }
 }

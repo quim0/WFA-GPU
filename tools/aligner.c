@@ -193,9 +193,11 @@ int main(int argc, char** argv) {
 
     LOG_INFO("Batch size = %d.", batch_size)
 
+    // TODO: Get from command line argument or from GPU specifications
+    const int num_blocks = 240;
+
     alignment_result_t* results = (alignment_result_t*)calloc(num_alignments, sizeof(alignment_result_t));
     uint32_t backtraces_offloaded_elements = BT_OFFLOADED_RESULT_ELEMENTS(max_distance);
-    // TODO: * batch_size instead of * num_alignments (?)
     wfa_backtrace_t* backtraces = (wfa_backtrace_t*)calloc(
                                                     backtraces_offloaded_elements * num_alignments,
                                                     sizeof(wfa_backtrace_t)
@@ -214,6 +216,7 @@ int main(int argc, char** argv) {
         backtraces,
         max_distance,
         threads_per_block,
+        num_blocks,
         batch_size,
         check
     );

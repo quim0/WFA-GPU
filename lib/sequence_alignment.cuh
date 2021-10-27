@@ -28,22 +28,27 @@
 
 void allocate_offloaded_bt_d (wfa_backtrace_t** bt_offloaded_d,
                               const int max_steps,
+                              const int num_blocks,
                               const size_t num_alignments);
 
 void reset_offloaded_bt_d (wfa_backtrace_t* bt_offloaded_d,
                            const int max_steps,
+                           const int num_blocks,
                            const size_t num_alignments,
                            cudaStream_t stream);
+
+size_t wf_data_buffer_size (const affine_penalties_t penalties,
+                             const size_t max_steps);
 
 void allocate_wf_data_buffer_d (uint8_t** wf_data_buffer,
                                 const size_t max_steps,
                                 const affine_penalties_t penalties,
-                                const size_t num_alignments);
+                                const size_t num_blocks);
 
 void reset_wf_data_buffer_d (uint8_t* wf_data_buffer,
                              const size_t max_steps,
                              const affine_penalties_t penalties,
-                             const size_t num_alignments,
+                             const size_t num_blocks,
                              cudaStream_t stream);
 
 void launch_alignments_async (const char* packed_sequences_buffer,
@@ -57,6 +62,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                               uint8_t* const wf_data_buffer_d,
                               const int max_steps,
                               const int threads_per_block,
+                              const int num_blocks,
                               cudaStream_t stream);
 
 #endif
