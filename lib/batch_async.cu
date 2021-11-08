@@ -150,6 +150,13 @@ void launch_alignments_batched (const char* sequences_buffer,
     // TODO: max_distance = max_steps (?)
     allocate_offloaded_bt_d(&bt_offloaded_d, max_distance, num_blocks, num_alignments);
 
+    // Bitmaps + rank allocation
+    wfa_bitmap_t* bitmaps_d;
+    wfa_rank_t* ranks_d;
+    allocate_bitmap_rank(max_distance, num_blocks, &bitmaps_d, &ranks_d);
+    size_t bitmaps_elements = bitmaps_buffer_elements(max_distance);
+
+    // Cells space
     uint8_t* wf_data_buffer;
     allocate_wf_data_buffer_d(&wf_data_buffer, max_distance,
                               penalties, num_blocks);
@@ -210,12 +217,14 @@ void launch_alignments_batched (const char* sequences_buffer,
             results_d,
             bt_offloaded_d,
             wf_data_buffer,
+            bitmaps_d,
+            ranks_d,
+            bitmaps_elements,
             max_distance,
             threads_per_block,
             num_blocks,
             stream2
         );
-
 
         // Copy unpacked sequences of next batch while the alignment kernel is
         // running. Don't do it in the final batch as there is no next batch in
@@ -255,6 +264,7 @@ void launch_alignments_batched (const char* sequences_buffer,
         // Make sure that alignment kernel has finished before packing the next
         // batch sequences
         cudaStreamSynchronize(stream2);
+        CUDA_CHECK_ERR
 
         LOG_DEBUG("Batch %d/%d computed", batch+1, num_batchs);
 
@@ -353,7 +363,6 @@ void launch_alignments_batched (const char* sequences_buffer,
                      " alignments per second checked)\n", batch, correct,
                      incorrect, avg_distance, curr_batch_size/ CLOCK_SECONDS);
         }
-
     }
 
     cudaStreamDestroy(stream1);
@@ -361,6 +370,7 @@ void launch_alignments_batched (const char* sequences_buffer,
     cudaStreamDestroy(stream2);
     CUDA_CHECK_ERR
 
+    free_bitmap_rank(bitmaps_d, ranks_d);
     cudaFree(d_seq_buffer_unpacked);
     cudaFree(d_seq_buffer_packed);
     cudaFree(d_seq_metadata);

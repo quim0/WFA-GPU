@@ -31,7 +31,11 @@ void allocate_offloaded_bt_d (wfa_backtrace_t** bt_offloaded_d,
                               const size_t num_alignments) {
     size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(max_steps);
 
-    if (bt_offloaded_size >= (1ULL<<(wfa_backtrace_bits-1))) {
+    // TODO: Remove magic number
+    // 31 because we use 32 bits for addressing the previous backtrace, but
+    // one is used for marking when garbage collecting the offloaded backtraces,
+    // so that information is lost.
+    if (bt_offloaded_size >= (1ULL<<31)) {
         LOG_ERROR("Trying to allocate more backtrace elements than the ones"
                   " that we can address")
         exit(-1);
@@ -43,7 +47,7 @@ void allocate_offloaded_bt_d (wfa_backtrace_t** bt_offloaded_d,
     size_t bt_offloaded_results_size = BT_OFFLOADED_RESULT_ELEMENTS(max_steps)
                                        * num_alignments;
 
-    LOG_DEBUG("Allocating %f MiB to store backtraces of %zu alignments using %d blocks.",
+    LOG_DEBUG("Allocating %.2f MiB to store backtraces of %zu alignments using %d blocks.",
               (float)((bt_offloaded_size + bt_offloaded_results_size) * sizeof(wfa_backtrace_t)) / (1 << 20),
               num_alignments, num_blocks)
 
@@ -73,8 +77,35 @@ void reset_offloaded_bt_d (wfa_backtrace_t* bt_offloaded_d,
     CUDA_CHECK_ERR
 }
 
+size_t bitmaps_buffer_elements (const size_t max_steps) {
+    size_t bt_bitmap_elements = ceil(
+                        BT_OFFLOADED_ELEMENTS(max_steps) / bitmap_size_bits
+                        );
+    return bt_bitmap_elements;
+}
+
+void allocate_bitmap_rank (const size_t max_steps,
+                           const int num_blocks,
+                           wfa_bitmap_t** bitmaps_ptr,
+                           wfa_rank_t** ranks_ptr) {
+    size_t elements = bitmaps_buffer_elements(max_steps) * num_blocks;
+    size_t to_alloc = elements * sizeof(wfa_bitmap_t) + elements * sizeof(wfa_rank_t);
+    LOG_DEBUG("Allocating %.2fMiB to store the bitvectors and ranks",
+              (double)to_alloc / (1 << 20));
+    cudaMalloc(bitmaps_ptr, to_alloc);
+    CUDA_CHECK_ERR
+
+    *ranks_ptr = (wfa_rank_t*)(*bitmaps_ptr + elements);
+}
+
+void free_bitmap_rank (wfa_bitmap_t* bitmaps_ptr,
+                       wfa_rank_t* ranks_ptr) {
+    cudaFree(bitmaps_ptr);
+    CUDA_CHECK_ERR
+}
+
 size_t wf_data_buffer_size (const affine_penalties_t penalties,
-                             const size_t max_steps) {
+                            const size_t max_steps) {
     const int max_wf_size = 2 * max_steps + 1;
     const int active_working_set = max(penalties.o+penalties.e, penalties.x) + 1;
     size_t cells_elements = active_working_set * max_wf_size;
@@ -93,7 +124,7 @@ void allocate_wf_data_buffer_d (uint8_t** wf_data_buffer,
     // Add a single int to be the global index of the next alignment in the pool
     buffer_size += sizeof(uint32_t);
 
-    LOG_DEBUG("Allocating %f MiB to store working set data of %zu blocks.",
+    LOG_DEBUG("Allocating %.2f MiB to store working set data of %zu blocks.",
               (float)(buffer_size) / (1 << 20), num_blocks)
 
     cudaMalloc(wf_data_buffer, buffer_size);
@@ -123,6 +154,9 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                               alignment_result_t *results_d,
                               wfa_backtrace_t* bt_offloaded_d,
                               uint8_t* const wf_data_buffer,
+                              wfa_bitmap_t* const bitmaps,
+                              wfa_rank_t* const ranks,
+                              const size_t bitmaps_elements,
                               const int max_steps,
                               const int threads_per_block,
                               const int num_blocks,
@@ -145,11 +179,11 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                     // backtraces. It will be atomically increased.
                     + sizeof(int);
 
-    uint32_t* next_alignment_idx = (uint32_t*)(bt_offloaded_d
-                                               + wf_data_buffer_size(
+    uint32_t* next_alignment_idx = (uint32_t*)(wf_data_buffer
+                                               + (wf_data_buffer_size(
                                                    penalties,
                                                    max_steps
-                                               ));
+                                               ) * num_blocks));
 
     dim3 gridSize(num_blocks);
     dim3 blockSize(threads_per_block);
@@ -170,6 +204,9 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                                               bt_offloaded_d,
                                               bt_offloaded_results_d,
                                               results_d,
+                                              bitmaps,
+                                              ranks,
+                                              bitmaps_elements,
                                               next_alignment_idx);
     CUDA_CHECK_ERR
 

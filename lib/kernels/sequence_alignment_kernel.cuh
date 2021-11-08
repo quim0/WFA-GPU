@@ -45,8 +45,8 @@
                                  )
 
 typedef struct {
-    int16_t hi;
-    int16_t lo;
+    int32_t hi;
+    int32_t lo;
     wfa_cell_t* cells;
     bool exist;
 } wfa_wavefront_t;
@@ -61,6 +61,9 @@ __global__ void alignment_kernel (
                             wfa_backtrace_t* offloaded_backtraces_global,
                             wfa_backtrace_t* offloaded_backtraces_results,
                             alignment_result_t* results,
+                            wfa_bitmap_t* bitmaps_global,
+                            wfa_rank_t* ranks_global,
+                            const size_t bitmaps_elements,
                             uint32_t* const next_alignment_idx);
 
 #define EWAVEFRONT_V(k,offset) ((offset)-(k))

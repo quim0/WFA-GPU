@@ -34,6 +34,10 @@ typedef struct {
     wfa_bt_prev_t prev;
 } wfa_backtrace_t;
 
+#define bitmap_size_bits 64
+typedef uint64_t wfa_bitmap_t;
+typedef uint64_t wfa_rank_t;
+
 // ! DO NOT CHANGE THE ORDER OF STRUCT MEMBERS !
 // The current order is assumed for doing 128 bit loads from global memory on
 // the GPU.
@@ -65,11 +69,13 @@ typedef struct {
 } wfa_cigar_t;
 
 // Height * width
+
 #define BT_OFFLOADED_ELEMENTS(max_steps) \
-                        (((max_steps) * 2 + 1) \
-                        * ((max_steps) * 2 / 16))
+                        ((((max_steps) * 2 + 1) \
+                        * ((max_steps) * 2 / (wfa_backtrace_bits / 2))))
+
 
 #define BT_OFFLOADED_RESULT_ELEMENTS(max_steps) \
-                        ((max_steps) * 2 / 16)
+                        ((max_steps) * 2 / (wfa_backtrace_bits / 2))
 
 #endif

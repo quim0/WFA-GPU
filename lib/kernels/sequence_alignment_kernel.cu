@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <cuda_runtime.h>
 #include "sequence_alignment_kernel.cuh"
+#include "garbage_collection.cuh"
 
 #define MAX_PB(A, B) llmax((A), (B))
 #define MAX(A, B) max((A), (B))
@@ -124,7 +125,9 @@ __device__ uint32_t offload_backtrace (unsigned int* const last_free_bt_position
                                    const wfa_bt_vector_t backtrace_vector,
                                    const wfa_bt_prev_t backtrace_prev,
                                    wfa_backtrace_t* const global_backtraces_array) {
-    uint32_t old_val = atomicAdd(last_free_bt_position, 1);
+    uint32_t old_val = atomicAdd_block(last_free_bt_position, 1);
+
+    //printf("offloading to position %d\n", old_val);
 
     global_backtraces_array[old_val].backtrace = backtrace_vector;
     global_backtraces_array[old_val].prev = backtrace_prev;
@@ -597,6 +600,9 @@ __global__ void alignment_kernel (
                             wfa_backtrace_t* offloaded_backtraces_global,
                             wfa_backtrace_t* offloaded_backtraces_results,
                             alignment_result_t* results,
+                            wfa_bitmap_t* bitmaps_global,
+                            wfa_rank_t* ranks_global,
+                            const size_t bitmaps_elements,
                             uint32_t* const next_alignment_idx) {
     const int tid = threadIdx.x;
     // m = 0 for WFA
@@ -607,13 +613,22 @@ __global__ void alignment_kernel (
     __shared__ uint32_t alignment_idx;
 
     // Get the first alignment to compute from the alignments pool
-    if (tid == 0) alignment_idx = get_alignment_idx(next_alignment_idx);
+    if (tid == 0) {
+        alignment_idx = get_alignment_idx(next_alignment_idx);
+    }
 
     __syncthreads();
 
+    wfa_bitmap_t* bitmaps = &bitmaps_global[blockIdx.x * bitmaps_elements];
+    wfa_rank_t* ranks = &ranks_global[blockIdx.x * bitmaps_elements];
+
     size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(max_steps);
-    wfa_backtrace_t* const offloaded_backtraces = \
+    size_t bt_buffer_offloaded_size = bt_offloaded_size / 2;
+    wfa_backtrace_t* offloaded_backtraces = \
              &offloaded_backtraces_global[blockIdx.x * bt_offloaded_size];
+
+    wfa_backtrace_t* offloaded_backtraces_second_buffer = \
+             offloaded_backtraces + bt_buffer_offloaded_size;
 
     size_t bt_results_size = BT_OFFLOADED_RESULT_ELEMENTS(max_steps);
 
@@ -668,7 +683,7 @@ __global__ void alignment_kernel (
 
         // Initialize all wavefronts to NULL
         for (int i=tid; i<(cells_size * 3); i+=blockDim.x) {
-            STORE_CELL(M_base[i], (uint32_t)-10000, 0L, 0);
+            STORE_CELL(M_base[i], (uint32_t)-100000, 0L, 0);
         }
 
         // Initialize wavefronts memory
@@ -739,7 +754,10 @@ __global__ void alignment_kernel (
             distance++;
             steps++;
 
-            while (steps < (max_steps - 1)) {
+            // When there is no more space available in the offloaded backtraces
+            // buffer after doing a garbage collection on it, the loop will
+            // break
+            while (true) {
                 bool M_exist = false;
                 bool GAP_exist = false;
                 const int o_delta = (curr_wf + o + e) % active_working_set_size;
@@ -790,6 +808,60 @@ __global__ void alignment_kernel (
                         finished = true;
                         break;
                     }
+
+                    uint32_t next_wf_size = M_wavefronts[curr_wf].hi - M_wavefronts[curr_wf].lo;
+                    // -1 as the first position is used as NULL
+                    size_t free_space_offsets = bt_buffer_offloaded_size - *last_free_bt_position - 1;
+
+
+                    if (free_space_offsets < next_wf_size) {
+                        // Garbarge collect the offloaded offsets
+                        //if (tid == 0) printf("hi=%d, lo=%d, total_size=%llu, free space=%llu, wf_size =%d, last_free_pos=%d\n", (int)M_wavefronts[curr_wf].hi, (int)M_wavefronts[curr_wf].lo, bt_buffer_offloaded_size, free_space_offsets, next_wf_size, *last_free_bt_position);
+
+                        //if (tid == 0) {
+                        //    pprint_offloaded_backtraces_chains(offloaded_backtraces,M_wavefronts[curr_wf].cells,M_wavefronts[curr_wf].hi,M_wavefronts[curr_wf].lo,last_free_bt_position);
+                        //}
+                        //__syncthreads();
+                        mark_offsets(
+                            M_wavefronts[curr_wf].hi,
+                            M_wavefronts[curr_wf].lo,
+                            M_wavefronts[curr_wf].cells,
+                            offloaded_backtraces
+                            );
+
+                        __syncthreads();
+
+                        fill_bitmap(
+                            M_wavefronts[curr_wf].cells,
+                            offloaded_backtraces,
+                            bt_buffer_offloaded_size,
+                            bitmaps_elements,
+                            bitmaps,
+                            ranks
+                        );
+
+                        // Swap offloaded backtraces buffers
+                        wfa_backtrace_t* tmp = offloaded_backtraces;
+                        offloaded_backtraces = offloaded_backtraces_second_buffer;
+                        offloaded_backtraces_second_buffer = tmp;
+
+                        //if (tid == 0) {
+                        //    pprint_offloaded_backtraces_chains(offloaded_backtraces,M_wavefronts[curr_wf].cells,M_wavefronts[curr_wf].hi,M_wavefronts[curr_wf].lo,last_free_bt_position);
+                        //}
+                        //__syncthreads();
+
+                        // Check if garbage collection created enough free space
+                        free_space_offsets = bt_buffer_offloaded_size - *last_free_bt_position - 1;
+                        if (free_space_offsets < next_wf_size) {
+                            // Can not finish the alignment with this offloaded
+                            // backtrces buffer size
+                            finished = false;
+                            break;
+                        }
+                    }
+
+                    // TODO: This can be avoided ?
+                    __syncthreads();
 
                     distance++;
                 }

@@ -45,6 +45,16 @@ void allocate_wf_data_buffer_d (uint8_t** wf_data_buffer,
                                 const affine_penalties_t penalties,
                                 const size_t num_blocks);
 
+size_t bitmaps_buffer_elements (const size_t max_steps);
+
+void allocate_bitmap_rank (const size_t max_steps,
+                           const int num_blocks,
+                           wfa_bitmap_t** bitmaps_ptr,
+                           wfa_rank_t** ranks_ptr);
+
+void free_bitmap_rank (wfa_bitmap_t* bitmaps_ptr,
+                       wfa_rank_t* ranks_ptr);
+
 void reset_wf_data_buffer_d (uint8_t* wf_data_buffer,
                              const size_t max_steps,
                              const affine_penalties_t penalties,
@@ -60,6 +70,9 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                               alignment_result_t* const results_d,
                               wfa_backtrace_t* bt_offloaded_d,
                               uint8_t* const wf_data_buffer_d,
+                              wfa_bitmap_t* const bitmaps,
+                              wfa_rank_t* const ranks,
+                              const size_t bitmaps_elements,
                               const int max_steps,
                               const int threads_per_block,
                               const int num_blocks,
