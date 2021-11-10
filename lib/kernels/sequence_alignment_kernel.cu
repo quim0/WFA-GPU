@@ -127,7 +127,7 @@ __device__ uint32_t offload_backtrace (unsigned int* const last_free_bt_position
                                    wfa_backtrace_t* const global_backtraces_array) {
     uint32_t old_val = atomicAdd_block(last_free_bt_position, 1);
 
-    //printf("offloading to position %d\n", old_val);
+    //printf("offloading to position %d (%d -> %d)\n", old_val, old_val, backtrace_prev);
 
     global_backtraces_array[old_val].backtrace = backtrace_vector;
     global_backtraces_array[old_val].prev = backtrace_prev;
@@ -467,8 +467,9 @@ __device__ void next_MDI (wfa_wavefront_t* M_wavefronts,
         );
     }
 
-    if (threadIdx.x == 0) {
 #if 0
+    __syncthreads();
+    if (threadIdx.x == 0) {
         wfa_wavefront_t curr_wf_obj_M = M_wavefronts[curr_wf];
         wfa_wavefront_t curr_wf_obj_I = I_wavefronts[curr_wf];
         wfa_wavefront_t curr_wf_obj_D = D_wavefronts[curr_wf];
@@ -537,8 +538,9 @@ __device__ void next_MDI (wfa_wavefront_t* M_wavefronts,
         }
         printf("__________________________________\n");
         printf("\n");
+    }
 #endif
-
+    if (threadIdx.x == 0) {
         M_wavefronts[curr_wf].hi = hi;
         M_wavefronts[curr_wf].lo = lo;
         M_wavefronts[curr_wf].exist = true;
@@ -829,15 +831,31 @@ __global__ void alignment_kernel (
                             offloaded_backtraces
                             );
 
+
                         __syncthreads();
 
                         fill_bitmap(
                             M_wavefronts[curr_wf].cells,
                             offloaded_backtraces,
                             bt_buffer_offloaded_size,
+                            *last_free_bt_position,
                             bitmaps_elements,
                             bitmaps,
                             ranks
+                        );
+
+                        clean_offloaded_offsets(
+                            offloaded_backtraces,
+                            offloaded_backtraces_second_buffer,
+                            bt_buffer_offloaded_size,
+                            bitmaps_elements,
+                            last_free_bt_position,
+                            bitmaps,
+                            ranks,
+                            M_wavefronts,
+                            I_wavefronts,
+                            D_wavefronts,
+                            active_working_set_size
                         );
 
                         // Swap offloaded backtraces buffers
@@ -847,6 +865,9 @@ __global__ void alignment_kernel (
 
                         //if (tid == 0) {
                         //    pprint_offloaded_backtraces_chains(offloaded_backtraces,M_wavefronts[curr_wf].cells,M_wavefronts[curr_wf].hi,M_wavefronts[curr_wf].lo,last_free_bt_position);
+                        //    pprint_offloaded_backtraces_buffer(
+                        //        offloaded_backtraces,
+                        //        last_free_bt_position);
                         //}
                         //__syncthreads();
 
@@ -893,9 +914,12 @@ __global__ void alignment_kernel (
 
             wfa_backtrace_t* curr_result = &backtrace;
 
+            printf("final list: cell ");
+
             // Save the list in reversed order
             int i = 0;
             while (curr_result->prev != 0) {
+                printf("-> %d (0x%llx)", curr_result->prev, offloaded_backtraces[curr_result->prev].backtrace);
                 offloaded_backtrace_results_base[i] = \
                                             offloaded_backtraces[curr_result->prev];
                 curr_result = &offloaded_backtraces[curr_result->prev];

@@ -38,7 +38,7 @@
 
 #define LOAD_CELL(cell) *(uint4*)(&(cell))
 #define UINT4_TO_OFFSET(cell) ((wfa_offset_t)(cell.x))
-#define UINT4_TO_BT_PREV(cell) ((wfa_offset_t)(cell.y))
+#define UINT4_TO_BT_PREV(cell) ((wfa_bt_prev_t)(cell.y))
 #define UINT4_TO_BT_VECTOR(cell) ((wfa_bt_vector_t)                     \
                                   (((wfa_bt_vector_t)(cell.z)) << 32) | \
                                   (cell.w)                              \

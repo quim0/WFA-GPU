@@ -30,27 +30,38 @@
 
 #define GET_BITMAP_IDX(backtrace_idx) ((backtrace_idx) / bitmap_size_bits)
 
+// If bitmap is changed to 32 bits, change those macros
+#define BITMAP_POPC(bitmap_popc_macro) __popcll(bitmap_popc_macro)
+#define BITMAP_FFS(bitmap_ffs_macro)   __ffsll(bitmap_ffs_macro)
+#define MARKED_POPC(marked_popc_macro) __popc(marked_popc_macro)
+
 __device__ void mark_offsets (
                         const int32_t hi,
                         const int32_t lo,
                         wfa_cell_t* const cells,
-                        wfa_backtrace_t* offloaded_buffer
-                        );
+                        wfa_backtrace_t* offloaded_buffer);
 
 __device__ void fill_bitmap (
                             wfa_cell_t* const cells,
                             wfa_backtrace_t* const offloaded_buffer,
                             const size_t offloaded_buffer_size,
+                            const size_t last_free_bt_position,
                             const size_t bitmaps_size,
                             wfa_bitmap_t* const bitmaps,
-                            wfa_rank_t* const rank);
+                            wfa_rank_t* const ranks);
 
 __device__ void clean_offloaded_offsets (
-                                    wfa_backtrace_t* const offloaded_buffer,
+                                    wfa_backtrace_t* const src_offloaded_buffer,
+                                    wfa_backtrace_t* const dst_offloaded_buffer,
                                     const size_t offloaded_buffer_size,
                                     const size_t bitmaps_size,
-                                    wfa_bitmap_t* const bitmaps,
-                                    wfa_rank_t* const ranks) {
+                                    uint32_t* const last_free_bt_position,
+                                    const wfa_bitmap_t* const bitmaps,
+                                    const wfa_rank_t* const ranks,
+                                    wfa_wavefront_t* const M_wavefronts,
+                                    wfa_wavefront_t* const I_wavefronts,
+                                    wfa_wavefront_t* const D_wavefronts,
+                                    const int active_working_set_size);
 
 #if 0
 __device__ void clean_offloaded_backtraces_buffer (

@@ -38,13 +38,15 @@ __device__ void mark_offsets (
         uint4 cell = LOAD_CELL(cells[k]);
         wfa_bt_prev_t bt_prev_idx = UINT4_TO_BT_PREV(cell);
         while (bt_prev_idx != 0) {
+            //printf("k=%d bt_prev_idx=%d\n", k, bt_prev_idx);
             wfa_backtrace_t* prev_bt = &offloaded_buffer[bt_prev_idx];
 
             // This race condition is not important, as all threads do the same
             // operation on the same bit (setting the highest bit to 1)
-            bt_prev_idx = prev_bt->prev & 0x7fffffff;
+            bt_prev_idx = prev_bt->prev & 0x7fffffffU;
             MARK_BACKTRACE(prev_bt);
         }
+        //printf("finished chain in k=%d\n", k);
     }
 }
 
@@ -53,6 +55,7 @@ __device__ void fill_bitmap (
                             wfa_cell_t* const cells,
                             wfa_backtrace_t* const offloaded_buffer,
                             const size_t offloaded_buffer_size,
+                            const size_t last_free_bt_position,
                             const size_t bitmaps_size,
                             wfa_bitmap_t* const bitmaps,
                             wfa_rank_t* const ranks) {
@@ -70,7 +73,9 @@ __device__ void fill_bitmap (
 
     // Set the marked backtraces on the offloaded buffer in the bitvectors, and
     // partially update ranks
-    for (int i=tid; i<offloaded_buffer_size; i+=blockDim.x) {
+    // Start from position 1, as position zero of the buffer is never used (used
+    // as delimiter for the backtrace chains)
+    for (int i=tid+1; i<last_free_bt_position; i+=blockDim.x) {
         wfa_backtrace_t* const backtrace = &offloaded_buffer[i];
         const bool is_marked = IS_MARKED(backtrace);
         UNMARK_BACKTRACE(backtrace);
@@ -82,7 +87,7 @@ __device__ void fill_bitmap (
 
         // In marked there is a bitmap of all threads in a warp that have a
         // marked backtrace
-        const size_t remaining_elements_of_warp = offloaded_buffer_size - (i - wtid);
+        const size_t remaining_elements_of_warp = last_free_bt_position - (i - wtid);
         unsigned mask = FULL_MASK;
         if (remaining_elements_of_warp < 32) {
             // First threads of the warp is on the lower bits, so lane_id=0 is
@@ -111,7 +116,8 @@ __device__ void fill_bitmap (
             // Warps access the rank in groups of two: warps 0 and 1 access
             // position 0, warps 2 and 3 access position 1... etc
             atomicAdd_block((unsigned long long*)curr_rank,
-                            (unsigned long long)__popc(marked));
+                            (unsigned long long)MARKED_POPC(marked));
+            //printf("warp %d, bitmap_idx=%d, popc=%llu\n", wid, bitmap_idx, (unsigned long long)MARKED_POPC(marked));
         }
     }
 
@@ -124,11 +130,185 @@ __device__ void fill_bitmap (
     // works
     // XXX: https://github.com/NVIDIA/cuda-samples/blob/master/Samples/shfl_scan/shfl_scan.cu#L56
     if (tid == 0) {
-        for (int i=1; i<bitmaps_size; i++) {
-            ranks[i] += ranks[i-1];
+        unsigned last_rank_idx = GET_BITMAP_IDX((last_free_bt_position) - 1);
+        last_rank_idx++;
+        for (int i=0; i<last_rank_idx; i++) {
+            ranks[i] += (i == 0) ? 0 : ranks[i-1];
         }
     }
 
+    __syncthreads();
+}
+
+
+__device__ void clean_offloaded_offsets (
+                                    wfa_backtrace_t* const src_offloaded_buffer,
+                                    wfa_backtrace_t* const dst_offloaded_buffer,
+                                    const size_t offloaded_buffer_size,
+                                    const size_t bitmaps_size,
+                                    uint32_t* const last_free_bt_position,
+                                    const wfa_bitmap_t* const bitmaps,
+                                    const wfa_rank_t* const ranks,
+                                    wfa_wavefront_t* const M_wavefronts,
+                                    wfa_wavefront_t* const I_wavefronts,
+                                    wfa_wavefront_t* const D_wavefronts,
+                                    const int active_working_set_size) {
+    // TODO: Change implementation so it does one iteration on each marked
+    // block, instead of one iteration per bitvector ??
+    unsigned last_rank_idx = GET_BITMAP_IDX((*last_free_bt_position) - 1) + 1;
+    int tid = threadIdx.x;
+
+    for (int i=0+tid; i<last_rank_idx; i+=blockDim.x) {
+        wfa_rank_t rank = (i == 0) ? 0 : ranks[i-1];
+        wfa_bitmap_t bitmap = bitmaps[i];
+        int num_set = BITMAP_POPC(bitmap);
+
+        unsigned curr_base_idx = i * bitmap_size_bits;
+
+        int first_set_idx = BITMAP_FFS(bitmap);
+        int backtrace_delta = -1;
+        for (int j=0; j<num_set; j++) {
+            // Position where this backtrace vector will be moved
+            const int to = rank + j + 1;
+
+            // Position where this backtrace vector "prev" will point
+            // first_set_idx starts at index 1 instead of zero, that is why
+            // backtrace_delta is initialized at -1
+            backtrace_delta += first_set_idx;
+
+            wfa_backtrace_t backtrace = src_offloaded_buffer[curr_base_idx + backtrace_delta];
+            wfa_bt_prev_t prev = backtrace.prev;
+
+            int link;
+            if (prev > 0) {
+                int prev_bitmap_idx = GET_BITMAP_IDX(prev);
+                wfa_bitmap_t prev_bitmap = bitmaps[prev_bitmap_idx];
+                wfa_rank_t prev_rank = (prev_bitmap_idx == 0) ? 0 : ranks[prev_bitmap_idx - 1];
+
+                int prev_bitmap_delta = prev % bitmap_size_bits;
+                // Count how many set bits there are until the target bit
+                // (including the target bit)
+                prev_bitmap <<= (bitmap_size_bits - prev_bitmap_delta);
+                link = prev_rank + BITMAP_POPC(prev_bitmap);
+            } else {
+                // End of chain, link to 0
+                link = 0;
+            }
+
+
+            backtrace.prev = link;
+            dst_offloaded_buffer[to] = backtrace;
+            
+            // Remove the bits that we already consumed
+            bitmap >>= first_set_idx;
+            first_set_idx = BITMAP_FFS(bitmap);
+        }
+    }
+
+    for (int wf_idx=0; wf_idx<active_working_set_size; wf_idx++) {
+        // Update ~M wavefront
+        wfa_wavefront_t curr_wf = M_wavefronts[wf_idx];
+        int hi = curr_wf.hi;
+        int lo = curr_wf.lo;
+        wfa_cell_t* cells = curr_wf.cells;
+        for (int k=lo+tid; k<=hi; k+=blockDim.x) {
+            uint4 cell = LOAD_CELL(cells[k]);
+            wfa_bt_prev_t prev = UINT4_TO_BT_PREV(cell);
+
+            wfa_bt_prev_t link;
+            if (prev > 0) {
+                int prev_bitmap_idx = GET_BITMAP_IDX(prev);
+                wfa_bitmap_t prev_bitmap = bitmaps[prev_bitmap_idx];
+                wfa_rank_t prev_rank = ranks[prev_bitmap_idx - 1];
+
+                int prev_bitmap_delta = prev % bitmap_size_bits;
+                // Count how many set bits there are until the target bit
+                // (including the target bit)
+                prev_bitmap <<= (bitmap_size_bits - prev_bitmap_delta);
+                link = prev_rank + BITMAP_POPC(prev_bitmap);
+                
+            } else link = 0;
+
+
+            STORE_CELL(cells[k],
+                       UINT4_TO_OFFSET(cell),
+                       UINT4_TO_BT_VECTOR(cell),
+                       link);
+        }
+
+        // Update ~I wavefront
+        curr_wf = I_wavefronts[wf_idx];
+        hi = curr_wf.hi;
+        lo = curr_wf.lo;
+        cells = curr_wf.cells;
+        for (int k=lo+tid; k<=hi; k+=blockDim.x) {
+            uint4 cell = LOAD_CELL(cells[k]);
+            wfa_bt_prev_t prev = UINT4_TO_BT_PREV(cell);
+
+            wfa_bt_prev_t link;
+            if (prev > 0) {
+                int prev_bitmap_idx = GET_BITMAP_IDX(prev);
+                wfa_bitmap_t prev_bitmap = bitmaps[prev_bitmap_idx];
+                wfa_rank_t prev_rank = ranks[prev_bitmap_idx - 1];
+
+                int prev_bitmap_delta = prev % bitmap_size_bits;
+                prev_bitmap <<= (bitmap_size_bits - prev_bitmap_delta);
+                link = prev_rank + BITMAP_POPC(prev_bitmap);
+                
+            } else link = 0;
+
+
+            STORE_CELL(cells[k],
+                       UINT4_TO_OFFSET(cell),
+                       UINT4_TO_BT_VECTOR(cell),
+                       link);
+        }
+
+        // Update ~D wavefront
+        curr_wf = D_wavefronts[wf_idx];
+        hi = curr_wf.hi;
+        lo = curr_wf.lo;
+        cells = curr_wf.cells;
+        for (int k=lo+tid; k<=hi; k+=blockDim.x) {
+            uint4 cell = LOAD_CELL(cells[k]);
+            wfa_bt_prev_t prev = UINT4_TO_BT_PREV(cell);
+
+            wfa_bt_prev_t link;
+            if (prev > 0) {
+                int prev_bitmap_idx = GET_BITMAP_IDX(prev);
+                wfa_bitmap_t prev_bitmap = bitmaps[prev_bitmap_idx];
+                wfa_rank_t prev_rank = ranks[prev_bitmap_idx - 1];
+
+                int prev_bitmap_delta = prev % bitmap_size_bits;
+                prev_bitmap <<= (bitmap_size_bits - prev_bitmap_delta);
+                link = prev_rank + BITMAP_POPC(prev_bitmap);
+                
+            } else link = 0;
+
+
+            STORE_CELL(cells[k],
+                       UINT4_TO_OFFSET(cell),
+                       UINT4_TO_BT_VECTOR(cell),
+                       link);
+        }
+    }
+
+    if (threadIdx.x == 0) {
+        printf("prev_last_free_pos=%d, ", *last_free_bt_position);
+        int tmp = *last_free_bt_position;
+        //wfa_rank_t last_rank = ranks[last_rank_idx - 1];
+        int i = 1;
+        wfa_rank_t curr_rank = 0;
+        wfa_rank_t rank = 0;
+        do {
+            rank = curr_rank;
+            curr_rank = ranks[i];
+            i++;
+        } while (curr_rank != 0);
+        *last_free_bt_position = rank + 1;
+        printf("new_last_free_position=%d, diff=%d\n", *last_free_bt_position,
+               tmp - *last_free_bt_position);
+    }
     __syncthreads();
 }
 
@@ -225,7 +405,7 @@ __device__ void pprint_offloaded_backtraces_buffer (
                                         wfa_backtrace_t* offloaded_buffer,
                                         const uint32_t* last_free_idx) {
     for (int i=0; i<*last_free_idx;) {
-        printf("|");
+        printf("%03d: |", i);
         for (int j=0; j<25; j++) {
             wfa_bt_prev_t prev = offloaded_buffer[i].prev;
             printf(" %04d |", prev);
@@ -265,6 +445,8 @@ __device__ void pprint_offloaded_backtraces_chains (
                 //bt_curr_idx = bt_prev_idx;
                 bt_prev_idx = prev_bt->prev;
             }
+
+            printf(" -> %d", bt_prev_idx);
         }
         else {
             printf(" -> 0");
