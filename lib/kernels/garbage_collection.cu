@@ -28,25 +28,72 @@
 #define FULL_MASK 0xffffffff
 
 __device__ void mark_offsets (
-                        const int32_t hi,
-                        const int32_t lo,
-                        wfa_cell_t* const cells,
+                        wfa_wavefront_t* const M_wavefronts,
+                        wfa_wavefront_t* const I_wavefronts,
+                        wfa_wavefront_t* const D_wavefronts,
+                        const int active_working_set_size,
                         wfa_backtrace_t* offloaded_buffer
                         ) {
     int tid = threadIdx.x;
-    for (int k=lo + tid; k<=hi; k+=blockDim.x) {
-        uint4 cell = LOAD_CELL(cells[k]);
-        wfa_bt_prev_t bt_prev_idx = UINT4_TO_BT_PREV(cell);
-        while (bt_prev_idx != 0) {
-            //printf("k=%d bt_prev_idx=%d\n", k, bt_prev_idx);
-            wfa_backtrace_t* prev_bt = &offloaded_buffer[bt_prev_idx];
 
-            // This race condition is not important, as all threads do the same
-            // operation on the same bit (setting the highest bit to 1)
-            bt_prev_idx = prev_bt->prev & 0x7fffffffU;
-            MARK_BACKTRACE(prev_bt);
+    // Mark all chains from all wavefronts in the active working set
+    for (int wf_idx=0; wf_idx<active_working_set_size; wf_idx++) {
+        // M wavefront
+        int hi = M_wavefronts[wf_idx].hi;
+        int lo = M_wavefronts[wf_idx].lo;
+        wfa_cell_t* cells = M_wavefronts[wf_idx].cells;
+        for (int k=lo+tid; k<=hi; k+=blockDim.x) {
+            uint4 cell = LOAD_CELL(cells[k]);
+            wfa_bt_prev_t bt_prev_idx = UINT4_TO_BT_PREV(cell);
+            wfa_offset_t offset = UINT4_TO_OFFSET(cell);
+            if (offset < 0) continue;
+            while (bt_prev_idx != 0) {
+                wfa_backtrace_t* prev_bt = &offloaded_buffer[bt_prev_idx];
+
+                // This race condition is not important, as all threads do the same
+                // operation on the same bit (setting the highest bit to 1)
+                bt_prev_idx = prev_bt->prev & 0x7fffffffU;
+                MARK_BACKTRACE(prev_bt);
+            }
         }
-        //printf("finished chain in k=%d\n", k);
+
+        // I wavefront
+        hi = I_wavefronts[wf_idx].hi;
+        lo = I_wavefronts[wf_idx].lo;
+        cells = I_wavefronts[wf_idx].cells;
+        for (int k=lo+tid; k<=hi; k+=blockDim.x) {
+            uint4 cell = LOAD_CELL(cells[k]);
+            wfa_bt_prev_t bt_prev_idx = UINT4_TO_BT_PREV(cell);
+            wfa_offset_t offset = UINT4_TO_OFFSET(cell);
+            if (offset < 0) continue;
+            while (bt_prev_idx != 0) {
+                wfa_backtrace_t* prev_bt = &offloaded_buffer[bt_prev_idx];
+
+                // This race condition is not important, as all threads do the same
+                // operation on the same bit (setting the highest bit to 1)
+                bt_prev_idx = prev_bt->prev & 0x7fffffffU;
+                MARK_BACKTRACE(prev_bt);
+            }
+        }
+
+        // D wavefront
+        hi = D_wavefronts[wf_idx].hi;
+        lo = D_wavefronts[wf_idx].lo;
+        cells = D_wavefronts[wf_idx].cells;
+        for (int k=lo+tid; k<=hi; k+=blockDim.x) {
+            uint4 cell = LOAD_CELL(cells[k]);
+            wfa_bt_prev_t bt_prev_idx = UINT4_TO_BT_PREV(cell);
+            wfa_offset_t offset = UINT4_TO_OFFSET(cell);
+            if (offset < 0) continue;
+            while (bt_prev_idx != 0) {
+                wfa_backtrace_t* prev_bt = &offloaded_buffer[bt_prev_idx];
+
+                // This race condition is not important, as all threads do the same
+                // operation on the same bit (setting the highest bit to 1)
+                bt_prev_idx = prev_bt->prev & 0x7fffffffU;
+                MARK_BACKTRACE(prev_bt);
+            }
+        }
     }
 }
 
@@ -198,8 +245,8 @@ __device__ void clean_offloaded_offsets (
             }
 
 
-            printf("moving from %d to %d (link from %d to %d)\n",
-                   curr_base_idx + backtrace_delta, to, backtrace.prev, link);
+            //printf("moving from %d to %d (link from %d to %d)\n",
+            //       curr_base_idx + backtrace_delta, to, backtrace.prev, link);
             backtrace.prev = link;
             dst_offloaded_buffer[to] = backtrace;
             
@@ -208,6 +255,9 @@ __device__ void clean_offloaded_offsets (
             first_set_idx = BITMAP_FFS(bitmap);
         }
     }
+
+    // XXX: This can be removed (?)
+    __syncthreads();
 
     for (int wf_idx=0; wf_idx<active_working_set_size; wf_idx++) {
         // Update ~M wavefront
@@ -230,6 +280,8 @@ __device__ void clean_offloaded_offsets (
                 // (including the target bit)
                 prev_bitmap <<= (bitmap_size_bits - prev_bitmap_delta);
                 link = prev_rank + BITMAP_POPC(prev_bitmap);
+                //if (link == 1359) printf("LINK wf=%d, k=%d, prev=%d, prev_bitmap_idx=%d, prev_bitmap_delta=%d\n", wf_idx, k,
+                //    prev, prev_bitmap_idx, prev_bitmap_delta);
                 
             } else link = 0;
 
@@ -298,21 +350,8 @@ __device__ void clean_offloaded_offsets (
     }
 
     if (threadIdx.x == 0) {
-        //printf("prev_last_free_pos=%d, ", *last_free_bt_position);
-        int tmp = *last_free_bt_position;
         wfa_rank_t last_rank = ranks[last_rank_idx - 1];
         *last_free_bt_position = last_rank + 1;
-        //int i = 1;
-        //wfa_rank_t curr_rank = 0;
-        //wfa_rank_t rank = 0;
-        //do {
-        //    rank = curr_rank;
-        //    curr_rank = ranks[i];
-        //    i++;
-        //} while (curr_rank != 0);
-        //*last_free_bt_position = rank + 1;
-        printf("new_last_free_position=%d, diff=%d\n", *last_free_bt_position,
-               tmp - *last_free_bt_position);
     }
     __syncthreads();
 }

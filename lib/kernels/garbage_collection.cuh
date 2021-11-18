@@ -36,9 +36,10 @@
 #define MARKED_POPC(marked_popc_macro) __popc(marked_popc_macro)
 
 __device__ void mark_offsets (
-                        const int32_t hi,
-                        const int32_t lo,
-                        wfa_cell_t* const cells,
+                        wfa_wavefront_t* const M_wavefronts,
+                        wfa_wavefront_t* const I_wavefronts,
+                        wfa_wavefront_t* const D_wavefronts,
+                        const int active_working_set_size,
                         wfa_backtrace_t* offloaded_buffer);
 
 __device__ void fill_bitmap (
