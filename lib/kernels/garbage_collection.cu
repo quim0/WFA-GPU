@@ -26,6 +26,7 @@
 #include "garbage_collection.cuh"
 
 #define FULL_MASK 0xffffffff
+#define REMOVE_MARK_MASK 0x7fffffffU
 
 __device__ void mark_offsets (
                         wfa_wavefront_t* const M_wavefronts,
@@ -52,7 +53,7 @@ __device__ void mark_offsets (
 
                 // This race condition is not important, as all threads do the same
                 // operation on the same bit (setting the highest bit to 1)
-                bt_prev_idx = prev_bt->prev & 0x7fffffffU;
+                bt_prev_idx = prev_bt->prev & REMOVE_MARK_MASK;
                 MARK_BACKTRACE(prev_bt);
             }
         }
@@ -71,7 +72,7 @@ __device__ void mark_offsets (
 
                 // This race condition is not important, as all threads do the same
                 // operation on the same bit (setting the highest bit to 1)
-                bt_prev_idx = prev_bt->prev & 0x7fffffffU;
+                bt_prev_idx = prev_bt->prev & REMOVE_MARK_MASK;
                 MARK_BACKTRACE(prev_bt);
             }
         }
@@ -90,7 +91,7 @@ __device__ void mark_offsets (
 
                 // This race condition is not important, as all threads do the same
                 // operation on the same bit (setting the highest bit to 1)
-                bt_prev_idx = prev_bt->prev & 0x7fffffffU;
+                bt_prev_idx = prev_bt->prev & REMOVE_MARK_MASK;
                 MARK_BACKTRACE(prev_bt);
             }
         }
@@ -108,11 +109,8 @@ __device__ void fill_bitmap (
                             wfa_rank_t* const ranks) {
     const int tid = threadIdx.x;
 
-    //if (tid == 0) printf("bitmap_elements = %llu\n", bitmaps_size); __syncthreads();
-
     // Set ranks to 0
     for (int i=tid; i<bitmaps_size; i+=blockDim.x) {
-        //printf("thread %i accessing position %d\n", tid, i);
         ranks[i] = 0;
     }
 
@@ -164,7 +162,6 @@ __device__ void fill_bitmap (
             // position 0, warps 2 and 3 access position 1... etc
             atomicAdd_block((unsigned long long*)curr_rank,
                             (unsigned long long)MARKED_POPC(marked));
-            //printf("warp %d, bitmap_idx=%d, popc=%llu\n", wid, bitmap_idx, (unsigned long long)MARKED_POPC(marked));
         }
     }
 
@@ -244,9 +241,6 @@ __device__ void clean_offloaded_offsets (
                 link = 0;
             }
 
-
-            //printf("moving from %d to %d (link from %d to %d)\n",
-            //       curr_base_idx + backtrace_delta, to, backtrace.prev, link);
             backtrace.prev = link;
             dst_offloaded_buffer[to] = backtrace;
             
@@ -280,8 +274,6 @@ __device__ void clean_offloaded_offsets (
                 // (including the target bit)
                 prev_bitmap <<= (bitmap_size_bits - prev_bitmap_delta);
                 link = prev_rank + BITMAP_POPC(prev_bitmap);
-                //if (link == 1359) printf("LINK wf=%d, k=%d, prev=%d, prev_bitmap_idx=%d, prev_bitmap_delta=%d\n", wf_idx, k,
-                //    prev, prev_bitmap_idx, prev_bitmap_delta);
                 
             } else link = 0;
 
@@ -348,6 +340,9 @@ __device__ void clean_offloaded_offsets (
                        link);
         }
     }
+
+    // Make sure all ranks are updated before proceeding
+    __syncthreads();
 
     if (threadIdx.x == 0) {
         wfa_rank_t last_rank = ranks[last_rank_idx - 1];
@@ -452,7 +447,7 @@ __device__ void pprint_offloaded_backtraces_buffer (
         printf("%04d: |", i);
         for (int j=0; j<5; j++) {
             wfa_backtrace_t* bt = &offloaded_buffer[i];
-            wfa_bt_prev_t prev = bt->prev & 0x7fffffffU;
+            wfa_bt_prev_t prev = bt->prev & REMOVE_MARK_MASK;
             bool marked = IS_MARKED(bt);
             char m = ' ';
             if (marked) m = 'X';
@@ -483,7 +478,7 @@ __device__ void pprint_offloaded_backtraces_chains (
             
             // Now previous backtrace is current backtrace
             //wfa_bt_prev_t bt_curr_idx = bt_prev_idx;
-            bt_prev_idx = prev_bt->prev & 0x7fffffffU;
+            bt_prev_idx = prev_bt->prev & REMOVE_MARK_MASK;
 
             while (bt_prev_idx != 0) {
                 printf(" -> %d (0x%llx) ", bt_prev_idx, prev_bt->backtrace);
@@ -491,7 +486,7 @@ __device__ void pprint_offloaded_backtraces_chains (
                 const wfa_backtrace_t* prev_bt = &offloaded_buffer[bt_prev_idx];
 
                 //bt_curr_idx = bt_prev_idx;
-                bt_prev_idx = prev_bt->prev & 0x7fffffffU;
+                bt_prev_idx = prev_bt->prev & REMOVE_MARK_MASK;
             }
 
             printf(" -> %d", bt_prev_idx);
