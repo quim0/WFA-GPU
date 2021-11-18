@@ -72,7 +72,7 @@ typedef struct {
 
 #define BT_OFFLOADED_ELEMENTS(max_steps) \
                         ((((max_steps) * 2 + 1) \
-                        * ((max_steps) * 2 / (wfa_backtrace_bits / 2))))
+                        * ((max_steps) * 2 / (wfa_backtrace_bits / 2))) / 10)
 
 
 #define BT_OFFLOADED_RESULT_ELEMENTS(max_steps) \

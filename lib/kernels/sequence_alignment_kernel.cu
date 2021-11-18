@@ -127,7 +127,7 @@ __device__ uint32_t offload_backtrace (unsigned int* const last_free_bt_position
                                    wfa_backtrace_t* const global_backtraces_array) {
     uint32_t old_val = atomicAdd_block(last_free_bt_position, 1);
 
-    //printf("offloading to position %d (%d -> %d)\n", old_val, old_val, backtrace_prev);
+    printf("offloading to position %d (%d -> %d)\n", old_val, old_val, backtrace_prev);
 
     global_backtraces_array[old_val].backtrace = backtrace_vector;
     global_backtraces_array[old_val].prev = backtrace_prev;
@@ -807,6 +807,7 @@ __global__ void alignment_kernel (
                     if (target_k_abs <= distance
                             && M_exist
                             && curr_target_offset == target_offset) {
+                        if (tid == 0) printf("target_k=%d, target_offset=%d\n", target_k, target_offset);
                         finished = true;
                         break;
                     }
@@ -818,12 +819,9 @@ __global__ void alignment_kernel (
 
                     if (free_space_offsets < next_wf_size) {
                         // Garbarge collect the offloaded offsets
-                        //if (tid == 0) printf("hi=%d, lo=%d, total_size=%llu, free space=%llu, wf_size =%d, last_free_pos=%d\n", (int)M_wavefronts[curr_wf].hi, (int)M_wavefronts[curr_wf].lo, bt_buffer_offloaded_size, free_space_offsets, next_wf_size, *last_free_bt_position);
+                        if (tid == 0) printf("hi=%d, lo=%d, total_size=%llu, free space=%llu, wf_size =%d, last_free_pos=%d\n", (int)M_wavefronts[curr_wf].hi, (int)M_wavefronts[curr_wf].lo, bt_buffer_offloaded_size, free_space_offsets, next_wf_size, *last_free_bt_position);
+                        __syncthreads();
 
-                        //if (tid == 0) {
-                        //    pprint_offloaded_backtraces_chains(offloaded_backtraces,M_wavefronts[curr_wf].cells,M_wavefronts[curr_wf].hi,M_wavefronts[curr_wf].lo,last_free_bt_position);
-                        //}
-                        //__syncthreads();
                         mark_offsets(
                             M_wavefronts[curr_wf].hi,
                             M_wavefronts[curr_wf].lo,
@@ -831,6 +829,12 @@ __global__ void alignment_kernel (
                             offloaded_backtraces
                             );
 
+                        __syncthreads();
+                        if (tid == 0) {
+                            pprint_offloaded_backtraces_chains(offloaded_backtraces,M_wavefronts[curr_wf].cells,M_wavefronts[curr_wf].hi,M_wavefronts[curr_wf].lo,last_free_bt_position);
+                            pprint_offloaded_backtraces_buffer(offloaded_backtraces,last_free_bt_position);
+                            printf("-----------------------------------------------------------------------------\n");
+                        }
 
                         __syncthreads();
 
@@ -863,13 +867,13 @@ __global__ void alignment_kernel (
                         offloaded_backtraces = offloaded_backtraces_second_buffer;
                         offloaded_backtraces_second_buffer = tmp;
 
-                        //if (tid == 0) {
-                        //    pprint_offloaded_backtraces_chains(offloaded_backtraces,M_wavefronts[curr_wf].cells,M_wavefronts[curr_wf].hi,M_wavefronts[curr_wf].lo,last_free_bt_position);
-                        //    pprint_offloaded_backtraces_buffer(
-                        //        offloaded_backtraces,
-                        //        last_free_bt_position);
-                        //}
-                        //__syncthreads();
+                        if (tid == 0) {
+                            pprint_offloaded_backtraces_chains(offloaded_backtraces,M_wavefronts[curr_wf].cells,M_wavefronts[curr_wf].hi,M_wavefronts[curr_wf].lo,last_free_bt_position);
+                            pprint_offloaded_backtraces_buffer(
+                                offloaded_backtraces,
+                                last_free_bt_position);
+                        }
+                        __syncthreads();
 
                         // Check if garbage collection created enough free space
                         free_space_offsets = bt_buffer_offloaded_size - *last_free_bt_position - 1;

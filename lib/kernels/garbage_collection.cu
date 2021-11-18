@@ -130,7 +130,7 @@ __device__ void fill_bitmap (
     // works
     // XXX: https://github.com/NVIDIA/cuda-samples/blob/master/Samples/shfl_scan/shfl_scan.cu#L56
     if (tid == 0) {
-        unsigned last_rank_idx = GET_BITMAP_IDX((last_free_bt_position) - 1);
+        unsigned last_rank_idx = GET_BITMAP_IDX((last_free_bt_position - 1)) + 1;
         last_rank_idx++;
         for (int i=0; i<last_rank_idx; i++) {
             ranks[i] += (i == 0) ? 0 : ranks[i-1];
@@ -166,14 +166,16 @@ __device__ void clean_offloaded_offsets (
         unsigned curr_base_idx = i * bitmap_size_bits;
 
         int first_set_idx = BITMAP_FFS(bitmap);
-        int backtrace_delta = -1;
+        // TODO: Check if this should really be 0 or -1
+        int backtrace_delta = 0;
         for (int j=0; j<num_set; j++) {
             // Position where this backtrace vector will be moved
             const int to = rank + j + 1;
 
             // Position where this backtrace vector "prev" will point
-            // first_set_idx starts at index 1 instead of zero, that is why
-            // backtrace_delta is initialized at -1
+            // first_set_idx starts at index 1 instead of zero,
+            // backtrace_delta is initialized at 0 anyway as the first element
+            // of the offloaded backtrace is "NULL" and not counted
             backtrace_delta += first_set_idx;
 
             wfa_backtrace_t backtrace = src_offloaded_buffer[curr_base_idx + backtrace_delta];
@@ -196,6 +198,8 @@ __device__ void clean_offloaded_offsets (
             }
 
 
+            printf("moving from %d to %d (link from %d to %d)\n",
+                   curr_base_idx + backtrace_delta, to, backtrace.prev, link);
             backtrace.prev = link;
             dst_offloaded_buffer[to] = backtrace;
             
@@ -294,18 +298,19 @@ __device__ void clean_offloaded_offsets (
     }
 
     if (threadIdx.x == 0) {
-        printf("prev_last_free_pos=%d, ", *last_free_bt_position);
+        //printf("prev_last_free_pos=%d, ", *last_free_bt_position);
         int tmp = *last_free_bt_position;
-        //wfa_rank_t last_rank = ranks[last_rank_idx - 1];
-        int i = 1;
-        wfa_rank_t curr_rank = 0;
-        wfa_rank_t rank = 0;
-        do {
-            rank = curr_rank;
-            curr_rank = ranks[i];
-            i++;
-        } while (curr_rank != 0);
-        *last_free_bt_position = rank + 1;
+        wfa_rank_t last_rank = ranks[last_rank_idx - 1];
+        *last_free_bt_position = last_rank + 1;
+        //int i = 1;
+        //wfa_rank_t curr_rank = 0;
+        //wfa_rank_t rank = 0;
+        //do {
+        //    rank = curr_rank;
+        //    curr_rank = ranks[i];
+        //    i++;
+        //} while (curr_rank != 0);
+        //*last_free_bt_position = rank + 1;
         printf("new_last_free_position=%d, diff=%d\n", *last_free_bt_position,
                tmp - *last_free_bt_position);
     }
@@ -405,10 +410,14 @@ __device__ void pprint_offloaded_backtraces_buffer (
                                         wfa_backtrace_t* offloaded_buffer,
                                         const uint32_t* last_free_idx) {
     for (int i=0; i<*last_free_idx;) {
-        printf("%03d: |", i);
-        for (int j=0; j<25; j++) {
-            wfa_bt_prev_t prev = offloaded_buffer[i].prev;
-            printf(" %04d |", prev);
+        printf("%04d: |", i);
+        for (int j=0; j<5; j++) {
+            wfa_backtrace_t* bt = &offloaded_buffer[i];
+            wfa_bt_prev_t prev = bt->prev & 0x7fffffffU;
+            bool marked = IS_MARKED(bt);
+            char m = ' ';
+            if (marked) m = 'X';
+            printf(" [%04d][%04d][%c] |", i, prev, m);
             i++;
         }
         printf("\n");
@@ -431,19 +440,19 @@ __device__ void pprint_offloaded_backtraces_chains (
             // Get previous backtrace
             const wfa_backtrace_t* prev_bt = &offloaded_buffer[bt_prev_idx];
 
-            printf(" -> %d", bt_prev_idx);
+            printf(" -> %d (0x%llx) ", bt_prev_idx, prev_bt->backtrace);
             
             // Now previous backtrace is current backtrace
             //wfa_bt_prev_t bt_curr_idx = bt_prev_idx;
-            bt_prev_idx = prev_bt->prev;
+            bt_prev_idx = prev_bt->prev & 0x7fffffffU;
 
             while (bt_prev_idx != 0) {
-                printf(" -> %d", bt_prev_idx);
+                printf(" -> %d (0x%llx) ", bt_prev_idx, prev_bt->backtrace);
 
                 const wfa_backtrace_t* prev_bt = &offloaded_buffer[bt_prev_idx];
 
                 //bt_curr_idx = bt_prev_idx;
-                bt_prev_idx = prev_bt->prev;
+                bt_prev_idx = prev_bt->prev & 0x7fffffffU;
             }
 
             printf(" -> %d", bt_prev_idx);
