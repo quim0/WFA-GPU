@@ -29,10 +29,11 @@ void allocate_offloaded_bt_d (wfa_backtrace_t** bt_offloaded_d,
                               const int max_steps,
                               const size_t num_alignments) {
     size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(max_steps);
+    size_t max_addressable_elements = 1L << (sizeof(bt_prev_t) * 8);
 
-    if (bt_offloaded_size >= (1L<<wfa_backtrace_bits)) {
+    if (bt_offloaded_size >= max_addressable_elements) {
         LOG_ERROR("Trying to allocate more backtrace elements than the ones"
-                  " that we can address")
+                  " that we can address.")
         exit(-1);
     }
 
@@ -42,7 +43,7 @@ void allocate_offloaded_bt_d (wfa_backtrace_t** bt_offloaded_d,
     size_t bt_offloaded_results_size = BT_OFFLOADED_RESULT_ELEMENTS(max_steps)
                                        * num_alignments;
 
-    LOG_DEBUG("Allocating %f MiB to store backtraces of %zu alignments.",
+    LOG_DEBUG("Allocating %.2f MiB to store backtraces of %zu alignments.",
               (float)((bt_offloaded_size + bt_offloaded_results_size) * sizeof(wfa_backtrace_t)) / (1 << 20),
               num_alignments)
 
@@ -86,11 +87,15 @@ void allocate_wf_data_buffer_d (uint8_t** wf_data_buffer,
     size_t wf_data_buffer_size =
                     // Offsets space
                     (offsets_elements * 3 * sizeof(wfa_offset_t))
-                    // Backtraces space
-                    + (bt_elements * 3 * sizeof(wfa_backtrace_t));
+                    // Backtraces vectors
+                    + (bt_elements * 3 * sizeof(bt_vector_t))
+                    // Backtraces pointers
+                    + (bt_elements * 3 * sizeof(bt_prev_t));
+    LOG_DEBUG("Working set size per alignment: %.2f MiB",
+              (float)(wf_data_buffer_size) / (1 << 20))
     wf_data_buffer_size *= num_alignments;
 
-    LOG_DEBUG("Allocating %f MiB to store working set data of %zu alignments.",
+    LOG_DEBUG("Allocating %.2f MiB to store working set data of %zu alignments.",
               (float)(wf_data_buffer_size) / (1 << 20), num_alignments)
 
     cudaMalloc(wf_data_buffer, wf_data_buffer_size);
@@ -112,8 +117,10 @@ void reset_wf_data_buffer_d (uint8_t* wf_data_buffer,
     size_t wf_data_buffer_size =
                     // Offsets space
                     (offsets_elements * 3 * sizeof(wfa_offset_t))
-                    // Backtraces space
-                    + (bt_elements * 3 * sizeof(wfa_backtrace_t));
+                    // Backtraces vectors
+                    + (bt_elements * 3 * sizeof(bt_vector_t))
+                    // Backtraces pointers
+                    + (bt_elements * 3 * sizeof(bt_prev_t));
     wf_data_buffer_size *= num_alignments;
 
     cudaMemsetAsync(wf_data_buffer, 0, wf_data_buffer_size, stream);

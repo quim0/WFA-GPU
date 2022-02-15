@@ -27,9 +27,13 @@
 typedef int32_t wfa_offset_t;
 
 #define wfa_backtrace_bits 32
-typedef struct {
-    uint32_t backtrace;
-    uint32_t prev;
+typedef uint32_t bt_vector_t;
+typedef uint32_t bt_prev_t;
+
+typedef struct
+{
+    bt_vector_t backtrace;
+    bt_prev_t prev;
 } wfa_backtrace_t;
 
 typedef enum {
@@ -51,9 +55,9 @@ typedef struct {
 // Height * width
 #define BT_OFFLOADED_ELEMENTS(max_steps) \
                         (((max_steps) * 2 + 1) \
-                        * ((max_steps) * 2 / 16))
+                        * ((max_steps) * 2 / (wfa_backtrace_bits / 2)))
 
 #define BT_OFFLOADED_RESULT_ELEMENTS(max_steps) \
-                        ((max_steps) * 2 / 16)
+                        ((max_steps) * 2 / (wfa_backtrace_bits / 2))
 
 #endif

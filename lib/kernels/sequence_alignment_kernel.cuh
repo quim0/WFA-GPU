@@ -34,7 +34,8 @@ typedef struct {
     int16_t lo;
     wfa_offset_t* offsets;
     bool exist;
-    wfa_backtrace_t* backtraces;
+    bt_vector_t* backtraces_vectors;
+    bt_prev_t* backtraces_pointers;
 } wfa_wavefront_t;
 
 __global__ void alignment_kernel (
