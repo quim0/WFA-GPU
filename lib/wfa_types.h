@@ -24,7 +24,7 @@
 
 #include "stdint.h"
 
-typedef int32_t wfa_offset_t;
+typedef int16_t wfa_offset_t;
 
 #define wfa_backtrace_bits 32
 typedef uint32_t bt_vector_t;

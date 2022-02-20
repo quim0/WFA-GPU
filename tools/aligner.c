@@ -36,7 +36,7 @@
 #include <errno.h>
 #include <string.h>
 
-#define NUM_ARGUMENTS 7
+#define NUM_ARGUMENTS 8
 
 int main(int argc, char** argv) {
 
@@ -97,6 +97,14 @@ int main(int argc, char** argv) {
          .description = "Number of alignments per batch.",
          .short_arg = 'b',
          .long_arg = "batch-size",
+         .required = false,
+         .type = ARG_INT
+         },
+         // 7
+        {.name = "GPU workers",
+         .description = "Number of blocks ('workers') to be running on the GPU.",
+         .short_arg = 'w',
+         .long_arg = "workers",
          .required = false,
          .type = ARG_INT
          },
@@ -193,6 +201,21 @@ int main(int argc, char** argv) {
 
     LOG_INFO("Batch size = %d.", batch_size)
 
+    int num_blocks;
+    if (options.options[7].parsed) {
+        num_blocks = options.options[7].value.int_val;
+    } else {
+        // TODO: Get this from num_threads and GPU capabilities
+        num_blocks = 68;
+    }
+
+    if (num_blocks <= 0) {
+        LOG_ERROR("Incorrect number of workers (%d).", num_blocks)
+        exit(-1);
+    }
+
+    LOG_INFO("Number of GPU workers = %d.", num_blocks)
+
     alignment_result_t* results = (alignment_result_t*)calloc(num_alignments, sizeof(alignment_result_t));
     uint32_t backtraces_offloaded_elements = BT_OFFLOADED_RESULT_ELEMENTS(max_distance);
     // TODO: * batch_size instead of * num_alignments (?)
@@ -214,6 +237,7 @@ int main(int argc, char** argv) {
         backtraces,
         max_distance,
         threads_per_block,
+        num_blocks,
         batch_size,
         check
     );

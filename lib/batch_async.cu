@@ -47,6 +47,7 @@ void launch_alignments_batched (const char* sequences_buffer,
                         wfa_backtrace_t* backtraces,
                         const int max_distance,
                         const int threads_per_block,
+                        const int num_blocks,
                         size_t batch_size,
                         bool check_correctness) {
     cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
@@ -136,11 +137,17 @@ void launch_alignments_batched (const char* sequences_buffer,
     // is allocated just once here and reused.
     wfa_backtrace_t* bt_offloaded_d;
     // TODO: max_distance = max_steps (?)
-    allocate_offloaded_bt_d(&bt_offloaded_d, max_distance, batch_size);
+    allocate_offloaded_bt_d(&bt_offloaded_d, max_distance, num_blocks, num_alignments);
 
     uint8_t* wf_data_buffer;
     allocate_wf_data_buffer_d(&wf_data_buffer, max_distance,
-                              penalties, batch_size);
+                              penalties, num_blocks);
+
+    uint32_t* next_alignment_idx_d = (uint32_t*)(wf_data_buffer +
+                                     wf_data_buffer_size(
+                                         penalties,
+                                         max_distance)
+                                     );
 
     for (int batch=0; batch < num_batchs; batch++) {
         const int from = batch * batch_size;
@@ -156,9 +163,9 @@ void launch_alignments_batched (const char* sequences_buffer,
 
         // TODO: Needed (?)
         // Reset the memory regions for the alignment kernel
-        reset_offloaded_bt_d(bt_offloaded_d, max_distance, batch_size, stream2);
+        reset_offloaded_bt_d(bt_offloaded_d, max_distance, num_blocks, num_alignments, stream2);
         reset_wf_data_buffer_d(wf_data_buffer, max_distance,
-                                  penalties, batch_size, stream2);
+                                  penalties, num_blocks, stream2);
 
         // Launch packing kernel
         pack_sequences_gpu_async(d_seq_buffer_unpacked,
@@ -218,6 +225,7 @@ void launch_alignments_batched (const char* sequences_buffer,
             wf_data_buffer,
             max_distance,
             threads_per_block,
+            num_blocks,
             stream2
         );
 
@@ -336,6 +344,7 @@ void launch_alignments_batched (const char* sequences_buffer,
     cudaFree(wf_data_buffer);
 }
 
+#if 0
 extern "C" void launch_alignments (const char* sequences_buffer,
                          const size_t sequences_buffer_size,
                          sequence_pair_t* sequences_metadata,
@@ -407,3 +416,4 @@ extern "C" void launch_alignments (const char* sequences_buffer,
     cudaFree(bt_offloaded_d);
     cudaFree(wf_data_buffer);
 }
+#endif

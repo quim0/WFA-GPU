@@ -11,7 +11,7 @@ SRC_TEST=$(wildcard tests/test_*.cu)
 ARGS=-I . -Ilib/
 ARGS_ALIGNER=-Lbuild/ -L/usr/local/cuda/lib64 $(ARGS)
 ARGS_WFA_CPU=-Lexternal/WFA/build/ $(ARGS) -Iexternal/WFA/ -lwfa
-NVCC_OPTIONS=-gencode arch=compute_$(COMPUTE),code=sm_$(SM) -Xcompiler -fopenmp
+NVCC_OPTIONS=-O3 -maxrregcount=64 -gencode arch=compute_$(COMPUTE),code=sm_$(SM) -Xptxas -v -Xcompiler -fopenmp
 
 aligner: wfa-cpu wfa-gpu-so $(SRC_ALIGNER)
 	mkdir -p bin
