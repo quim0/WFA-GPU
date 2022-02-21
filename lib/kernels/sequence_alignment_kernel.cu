@@ -497,6 +497,20 @@ __global__ void alignment_kernel (
     wfa_wavefront_t* I_wavefronts = (M_wavefronts + active_working_set_size);
     wfa_wavefront_t* D_wavefronts = (I_wavefronts + active_working_set_size);
 
+    for (int i=tid; i<active_working_set_size; i+=blockDim.x) {
+        M_wavefronts[i].offsets = M_base + (i * max_wf_size) + (max_wf_size/2);
+        M_wavefronts[i].backtraces_vectors = M_bt_vector_base + (i * max_wf_size) + (max_wf_size/2);
+        M_wavefronts[i].backtraces_pointers = M_bt_prev_base + (i * max_wf_size) + (max_wf_size/2);
+
+        I_wavefronts[i].offsets = I_base + (i * max_wf_size) + (max_wf_size/2);
+        I_wavefronts[i].backtraces_vectors = I_bt_vector_base + (i * max_wf_size) + (max_wf_size/2);
+        I_wavefronts[i].backtraces_pointers = I_bt_prev_base + (i * max_wf_size) + (max_wf_size/2);
+
+        D_wavefronts[i].offsets = D_base + (i * max_wf_size) + (max_wf_size/2);
+        D_wavefronts[i].backtraces_vectors = D_bt_vector_base + (i * max_wf_size) + (max_wf_size/2);
+        D_wavefronts[i].backtraces_pointers = D_bt_prev_base + (i * max_wf_size) + (max_wf_size/2);
+    }
+
     uint32_t* last_free_bt_position = (uint32_t*)
                                           (D_wavefronts + active_working_set_size);
 
@@ -518,7 +532,7 @@ __global__ void alignment_kernel (
         // recover)
         *last_free_bt_position = 1;
 
-        // Initialize all wavefronts to -1
+        // Initialize all wavefronts to NULL
         for (int i=tid; i<(offsets_size * 3); i+=blockDim.x) {
             __stwt(&M_base[i], OFFSET_NULL);
         }
@@ -533,25 +547,15 @@ __global__ void alignment_kernel (
             __stwt(&M_bt_prev_base[i], 0);
         }
 
-        // Initialize wavefronts memory
         for (int i=tid; i<active_working_set_size; i+=blockDim.x) {
-            M_wavefronts[i].offsets = M_base + (i * max_wf_size) + (max_wf_size/2);
-            M_wavefronts[i].backtraces_vectors = M_bt_vector_base + (i * max_wf_size) + (max_wf_size/2);
-            M_wavefronts[i].backtraces_pointers = M_bt_prev_base + (i * max_wf_size) + (max_wf_size/2);
             M_wavefronts[i].hi = 0;
             M_wavefronts[i].lo = 0;
             M_wavefronts[i].exist = false;
 
-            I_wavefronts[i].offsets = I_base + (i * max_wf_size) + (max_wf_size/2);
-            I_wavefronts[i].backtraces_vectors = I_bt_vector_base + (i * max_wf_size) + (max_wf_size/2);
-            I_wavefronts[i].backtraces_pointers = I_bt_prev_base + (i * max_wf_size) + (max_wf_size/2);
             I_wavefronts[i].hi = 0;
             I_wavefronts[i].lo = 0;
             I_wavefronts[i].exist = false;
 
-            D_wavefronts[i].offsets = D_base + (i * max_wf_size) + (max_wf_size/2);
-            D_wavefronts[i].backtraces_vectors = D_bt_vector_base + (i * max_wf_size) + (max_wf_size/2);
-            D_wavefronts[i].backtraces_pointers = D_bt_prev_base + (i * max_wf_size) + (max_wf_size/2);
             D_wavefronts[i].hi = 0;
             D_wavefronts[i].lo = 0;
             D_wavefronts[i].exist = false;
