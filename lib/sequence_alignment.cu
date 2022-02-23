@@ -163,11 +163,11 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                     // backtraces. It will be atomically increased.
                     + sizeof(int);
 
-    uint32_t* next_alignment_idx = (uint32_t*)(bt_offloaded_d
+    uint32_t* next_alignment_idx = (uint32_t*)(wf_data_buffer
                                            + wf_data_buffer_size(
                                                penalties,
                                                max_steps
-                                           ));
+                                           ) * num_blocks);
     dim3 gridSize(num_blocks);
     dim3 blockSize(threads_per_block);
 
