@@ -42,7 +42,7 @@ test-alignment: tests/test_alignment_kernel.cu wfa-cpu wfa-gpu-so
 
 wfa-gpu-so: $(SRC_LIB)
 	mkdir -p build
-	$(NVCC) -O2 $(NVCC_OPTIONS) $(ARGS) -Xcompiler -fPIC -dc $^
+	$(NVCC) $(NVCC_OPTIONS) $(ARGS) -Xcompiler -fPIC -dc $^
 	mv *.o build/
 	$(NVCC) $(NVCC_OPTIONS) -shared -o build/libwfagpu.so build/*.o -lcudart
 
@@ -66,7 +66,7 @@ wfa-cpu: $(SRC_WFA_CPU)
 wfa-gpu: $(SRC_LIB) wfa-cpu
 # TODO: Not working well
 	mkdir -p build
-	$(NVCC) -O2 $(NVCC_OPTIONS) $(ARGS) -Xcompiler -fPIC -dc $^
+	$(NVCC) $(NVCC_OPTIONS) $(ARGS) -Xcompiler -fPIC -dc $^
 	mv *.o build/
 	$(NVCC) -dlink -o wfagpu.o build/*.o -lcudart
 	ar cru build/libwfagpu.a build/*.o

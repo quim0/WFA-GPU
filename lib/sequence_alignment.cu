@@ -75,6 +75,32 @@ void reset_offloaded_bt_d (wfa_backtrace_t* bt_offloaded_d,
     CUDA_CHECK_ERR
 }
 
+size_t available_shared_mem_per_block (const affine_penalties_t penalties,
+                                       const size_t max_steps,
+                                       const int threads_per_block) {
+    // TODO: Take band into account
+    // TODO: Choose device from argument
+    cudaDeviceProp deviceProp;
+    cudaGetDeviceProperties(&deviceProp, 0);
+    CUDA_CHECK_ERR
+
+    const size_t shared_mem_per_block = deviceProp.sharedMemPerBlock;
+    const int max_occupancy = deviceProp.maxThreadsPerMultiProcessor / deviceProp.warpSize;
+
+    // Assume we get an occupancy of 32 warps per SM, with the limiting factor
+    // being the registers used.
+    const int max_active_warps_per_sm = min(32, max_occupancy);
+
+    const int warps_per_block = threads_per_block / deviceProp.warpSize;
+    const int blocks_per_sm = max_active_warps_per_sm / warps_per_block;
+    const size_t usable_sh_mem_per_block = shared_mem_per_block / blocks_per_sm;
+
+    LOG_DEBUG("Maximum usable shared memory per block: %.2fKiB. Maximum shared memory per block=%.2fKiB",
+              (double)usable_sh_mem_per_block / (1<<10),
+              (double)shared_mem_per_block / (1<<10))
+    return usable_sh_mem_per_block;
+}
+
 size_t wf_data_buffer_size (const affine_penalties_t penalties,
                              const size_t max_steps) {
     const int max_wf_size = 2 * max_steps + 1;
@@ -99,8 +125,8 @@ void allocate_wf_data_buffer_d (uint8_t** wf_data_buffer,
 
     // Create the active working set buffer on global memory
     size_t buffer_size = wf_data_buffer_size(penalties, max_steps);
-    LOG_DEBUG("Working set size per block: %.2f MiB",
-              (float)(buffer_size) / (1 << 20))
+    LOG_DEBUG("Working set size per block: %.2f KiB",
+              (float)(buffer_size) / (1 << 10))
     buffer_size *= num_blocks;
 
     // Add a single int to be the global index of the next alignment in the pool
@@ -163,6 +189,30 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                     // backtraces. It will be atomically increased.
                     + sizeof(int);
 
+    size_t available_sh_mem_per_block = available_shared_mem_per_block(
+                                            penalties,
+                                            max_steps,
+                                            threads_per_block) - sh_mem_size;
+
+    const int max_sh_offsets_per_block = available_sh_mem_per_block / sizeof(wfa_offset_t);
+    int max_sh_offsets_per_wf = max_sh_offsets_per_block / (active_working_set * 3);
+    // Make it an odd number
+    if ((max_sh_offsets_per_wf % 2) == 0) {
+        max_sh_offsets_per_wf--;
+    }
+
+    // Make sure if fits in shared memory taking into account the wavefronts
+    // metadata
+    while ((max_sh_offsets_per_wf * sizeof(wfa_offset_t) * active_working_set * 3)
+                > available_sh_mem_per_block) {
+        max_sh_offsets_per_wf -= 2;
+    }
+
+    // Add offsets size to shared memory
+    sh_mem_size += max_sh_offsets_per_wf * sizeof(wfa_offset_t) * active_working_set * 3;
+
+    LOG_DEBUG("Each wavefront have %d offsets on shared memory", max_sh_offsets_per_wf)
+
     uint32_t* next_alignment_idx = (uint32_t*)(wf_data_buffer
                                            + wf_data_buffer_size(
                                                penalties,
@@ -172,7 +222,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
     dim3 blockSize(threads_per_block);
 
     LOG_DEBUG("Launching %d blocks of %d threads with %.2fKiB of shared memory",
-              gridSize.x, blockSize.x, (float(sh_mem_size) / (2 << 10)));
+              gridSize.x, blockSize.x, (float(sh_mem_size) / (1 << 10)));
 
     LOG_DEBUG("Working with penalties: X=%d, O=%d, E=%d", penalties.x,
               penalties.o, penalties.e);
@@ -187,7 +237,8 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                                               bt_offloaded_d,
                                               bt_offloaded_results_d,
                                               results_d,
-                                              next_alignment_idx);
+                                              next_alignment_idx,
+                                              max_sh_offsets_per_wf);
     CUDA_CHECK_ERR
 
     // TODO: Unify results and backtraces memory buffers to do a signle memcpy
@@ -198,6 +249,4 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                bt_offloaded_results_size * sizeof(wfa_backtrace_t),
                cudaMemcpyDeviceToHost, stream);
     CUDA_CHECK_ERR
-
-    // TODO: CUDAFREE
 }

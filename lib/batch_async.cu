@@ -50,7 +50,7 @@ void launch_alignments_batched (const char* sequences_buffer,
                         const int num_blocks,
                         size_t batch_size,
                         bool check_correctness) {
-    cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
+    cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
 
     if (batch_size == 0) batch_size = num_alignments;
 
