@@ -481,7 +481,7 @@ __global__ void alignment_kernel (
 
     __syncthreads();
 
-    size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(max_steps);
+    const size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(max_steps);
     wfa_backtrace_t* const offloaded_backtraces = \
              &offloaded_backtraces_global[blockIdx.x * bt_offloaded_size];
 
@@ -494,8 +494,7 @@ __global__ void alignment_kernel (
 
     // TODO: +1 because of the current wf?
     const int active_working_set_size = MAX(o+e, x) + 1;
-    // Substract the offsets that live on shared memory
-    const int max_wf_size = 2 * max_steps + 1 - num_sh_offsets_per_wf;
+    const int max_wf_size = 2 * max_steps + 1;
     const int max_wf_size_bt = 2 * max_steps + 1;
 
     // Offsets and backtraces must be 32 bits aligned to avoid unaligned access
