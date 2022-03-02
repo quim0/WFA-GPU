@@ -169,8 +169,6 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                               cudaStream_t stream) {
 
     size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(max_steps) * num_blocks;
-    size_t bt_offloaded_results_size = BT_OFFLOADED_RESULT_ELEMENTS(max_steps)
-                                       * num_alignments;
 
     wfa_backtrace_t* bt_offloaded_results_d = bt_offloaded_d
                                               + bt_offloaded_size;
@@ -240,8 +238,23 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                                               next_alignment_idx,
                                               max_sh_offsets_per_wf);
     CUDA_CHECK_ERR
+}
 
-    // TODO: Unify results and backtraces memory buffers to do a signle memcpy
+void copyInResults (alignment_result_t* const results,
+                    const alignment_result_t* const results_d,
+                    wfa_backtrace_t* const backtraces,
+                    const wfa_backtrace_t* const bt_offloaded_d,
+                    const size_t num_alignments,
+                    const int max_steps,
+                    const int num_blocks,
+                    cudaStream_t stream) {
+    const size_t bt_offloaded_results_size = BT_OFFLOADED_RESULT_ELEMENTS(max_steps)
+                                             * num_alignments;
+    const size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(max_steps) * num_blocks;
+
+    const wfa_backtrace_t* const bt_offloaded_results_d = bt_offloaded_d
+                                              + bt_offloaded_size;
+
     cudaMemcpyAsync(results, results_d, num_alignments * sizeof(alignment_result_t),
                cudaMemcpyDeviceToHost, stream);
     CUDA_CHECK_ERR

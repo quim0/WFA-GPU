@@ -149,11 +149,17 @@ void launch_alignments_batched (const char* sequences_buffer,
                                          max_distance)
                                      );
 
-    for (int batch=0; batch < num_batchs; batch++) {
-        const int from = batch * batch_size;
-        const int to = (batch == (num_batchs-1))
+    int from, to, curr_batch_size, batch;
+
+    for (batch=0; batch < num_batchs; batch++) {
+
+        const int prev_from = from;
+        const int prev_to = to;
+        const int prev_curr_batch_size = curr_batch_size;
+        from = batch * batch_size;
+        to = (batch == (num_batchs-1))
                        ? num_alignments-1 : (((batch+1) * batch_size) - 1);
-        const int curr_batch_size = to - from + 1;
+        curr_batch_size = to - from + 1;
 
         // Copy metadata of current batch
         cudaMemcpyAsync(d_seq_metadata, &sequences_metadata[from],
@@ -167,16 +173,141 @@ void launch_alignments_batched (const char* sequences_buffer,
         reset_wf_data_buffer_d(wf_data_buffer, max_distance,
                                   penalties, num_blocks, stream2);
 
+
+        // Wait for unpacked sequences memcpys to finish
+        cudaStreamSynchronize(stream1);
+
         // Launch packing kernel
         pack_sequences_gpu_async(d_seq_buffer_unpacked,
                                  d_seq_buffer_packed,
                                  d_seq_metadata,
                                  curr_batch_size,
-                                 stream1);
+                                 stream2);
 
         // Make sure packing kernel have finished before sending the next
         // unpacked sequences to the device
-        cudaStreamSynchronize(stream1);
+        //cudaStreamSynchronize(stream1);
+
+        // Align current batch
+        launch_alignments_async(
+            d_seq_buffer_packed,
+            d_seq_metadata,
+            curr_batch_size,
+            penalties,
+            results,
+            backtraces,
+            results_d,
+            bt_offloaded_d,
+            wf_data_buffer,
+            max_distance,
+            threads_per_block,
+            num_blocks,
+            stream2
+        );
+
+
+        // Compute previous batch alignments that need to be offloaded to
+        // CPU, while the current batch alignments are computed.
+        if (batch > 0) {
+            int alignments_computed_cpu = 0;
+            for (int i=0; i<prev_curr_batch_size; i++) {
+                int real_i = i + prev_from;
+                if (!results[i].finished) {
+                    alignments_computed_cpu++;
+
+                    size_t toffset = sequences_metadata[real_i].text_offset;
+                    size_t poffset = sequences_metadata[real_i].pattern_offset;
+
+                    const char* text = &sequences_buffer[toffset];
+                    const char* pattern = &sequences_buffer[poffset];
+
+                    size_t tlen = sequences_metadata[real_i].text_len;
+                    size_t plen = sequences_metadata[real_i].pattern_len;
+
+                    results[i].distance = compute_alignment_cpu(
+                        pattern, text,
+                        plen, tlen,
+                        penalties.x, penalties.o, penalties.e
+                    );
+
+                    // TODO: CIGAR ?
+                }
+            }
+
+            if (alignments_computed_cpu > 0) {
+                LOG_INFO("(Batch %d) %d/%d alignemnts could not be computed on the"
+                         " GPU and where offloaded to the CPU.",
+                         batch-1, alignments_computed_cpu, prev_curr_batch_size)
+            }
+
+            // Check correctness if asked
+            if (check_correctness) {
+                LOG_DEBUG("Checking batch %d correctnes.", batch);
+                const uint32_t backtraces_offloaded_elements = BT_OFFLOADED_RESULT_ELEMENTS(max_distance);
+                float avg_distance = 0;
+                int correct = 0;
+                int incorrect = 0;
+                CLOCK_INIT()
+                CLOCK_START()
+                #pragma omp parallel for reduction(+:avg_distance,correct,incorrect)
+                for (int i=prev_from; i<=prev_to; i++) {
+                    // TODO: Check also CPU distances ?
+                    if (!results[i-prev_from].finished) {
+                        correct++;
+                        avg_distance += results[i-prev_from].distance;
+                        continue;
+                    }
+
+                    size_t toffset = sequences_metadata[i].text_offset;
+                    size_t poffset = sequences_metadata[i].pattern_offset;
+
+                    const char* text = &sequences_buffer[toffset];
+                    const char* pattern = &sequences_buffer[poffset];
+
+                    size_t tlen = sequences_metadata[i].text_len;
+                    size_t plen = sequences_metadata[i].pattern_len;
+
+                    int distance = results[i-prev_from].distance;
+                    char* cigar = recover_cigar(text, pattern, tlen,
+                                                plen, results[i-prev_from].backtrace,
+                                                backtraces + backtraces_offloaded_elements*(i-prev_from),
+                                                results[i-prev_from]);
+
+                    bool correct_cigar = check_cigar_edit(text, pattern, tlen, plen, cigar);
+                    bool correct_affine_d = check_affine_distance(text, pattern, tlen,
+                                                                  plen, distance,
+                                                                  penalties, cigar);
+
+                    if (!correct_cigar) {
+                        LOG_ERROR("Incorrect cigar %d (%d). Distance: %d. CIGAR: %s\n", i-prev_from, i, distance, cigar);
+                    }
+
+                    avg_distance += distance;
+
+                    if (correct_cigar && correct_affine_d) {
+                        correct++;
+                    } else {
+                        incorrect++;
+                    }
+                    free(cigar);
+                }
+
+                avg_distance /= prev_curr_batch_size;
+                CLOCK_STOP()
+                LOG_INFO("(Batch %d) correct=%d Incorrect=%d Average score=%f (%.3f"
+                         " alignments per second checked)\n", batch-1, correct,
+                         incorrect, avg_distance, prev_curr_batch_size/ CLOCK_SECONDS);
+            }
+        }
+
+        copyInResults(results,
+            results_d,
+            backtraces,
+            bt_offloaded_d,
+            curr_batch_size,
+            max_distance,
+            num_blocks,
+            stream2);
 
         // Copy unpacked sequences of next batch while the alignment kernel is
         // running. Don't do it in the final batch as there is no next batch in
@@ -211,124 +342,102 @@ void launch_alignments_batched (const char* sequences_buffer,
             }
         }
 
-        // TODO: max_distance = max_steps (?)
-        // Align current batch
-        launch_alignments_async(
-            d_seq_buffer_packed,
-            d_seq_metadata,
-            curr_batch_size,
-            penalties,
-            results,
-            backtraces,
-            results_d,
-            bt_offloaded_d,
-            wf_data_buffer,
-            max_distance,
-            threads_per_block,
-            num_blocks,
-            stream2
-        );
-
         // Make sure that alignment kernel has finished before packing the next
         // batch sequences
         cudaStreamSynchronize(stream2);
 
         LOG_DEBUG("Batch %d/%d computed", batch+1, num_batchs);
+    }
 
-        int alignments_computed_cpu = 0;
-        for (int i=0; i<curr_batch_size; i++) {
-            int real_i = i + from;
-            if (!results[i].finished) {
-                alignments_computed_cpu++;
+    // Compute alignments of the last batch that need to be computed on CPU
+    int alignments_computed_cpu = 0;
+    for (int i=0; i<curr_batch_size; i++) {
+        int real_i = i + from;
+        if (!results[i].finished) {
+            alignments_computed_cpu++;
 
-                size_t toffset = sequences_metadata[real_i].text_offset;
-                size_t poffset = sequences_metadata[real_i].pattern_offset;
+            size_t toffset = sequences_metadata[real_i].text_offset;
+            size_t poffset = sequences_metadata[real_i].pattern_offset;
 
-                const char* text = &sequences_buffer[toffset];
-                const char* pattern = &sequences_buffer[poffset];
+            const char* text = &sequences_buffer[toffset];
+            const char* pattern = &sequences_buffer[poffset];
 
-                size_t tlen = sequences_metadata[real_i].text_len;
-                size_t plen = sequences_metadata[real_i].pattern_len;
+            size_t tlen = sequences_metadata[real_i].text_len;
+            size_t plen = sequences_metadata[real_i].pattern_len;
 
-                results[i].distance = compute_alignment_cpu(
-                    pattern, text,
-                    plen, tlen,
-                    penalties.x, penalties.o, penalties.e
-                );
+            results[i].distance = compute_alignment_cpu(
+                pattern, text,
+                plen, tlen,
+                penalties.x, penalties.o, penalties.e
+            );
 
-                // TODO: CIGAR ?
-            }
+            // TODO: CIGAR ?
         }
+    }
 
-        if (alignments_computed_cpu > 0) {
-            LOG_INFO("(Batch %d) %d/%d alignemnts could not be computed on the"
-                     " GPU and where offloaded to the CPU.",
-                     batch, alignments_computed_cpu, curr_batch_size)
-            // TODO: Make the computations on the CPU using the WFA library
-        }
+    if (alignments_computed_cpu > 0) {
+        LOG_INFO("(Batch %d) %d/%d alignemnts could not be computed on the"
+                 " GPU and where offloaded to the CPU.",
+                 batch, alignments_computed_cpu, curr_batch_size)
+    }
 
-        // TODO: check correctness/ recover cigar from previous batch while the
-        // kernel from current batch is running (?)
-
-        // Check correctness if asked
-        if (check_correctness) {
-            LOG_DEBUG("Checking batch %d correctnes.", batch+1);
-            const uint32_t backtraces_offloaded_elements = BT_OFFLOADED_RESULT_ELEMENTS(max_distance);
-            float avg_distance = 0;
-            int correct = 0;
-            int incorrect = 0;
-            CLOCK_INIT()
-            CLOCK_START()
-            #pragma omp parallel for reduction(+:avg_distance,correct,incorrect)
-            for (int i=from; i<=to; i++) {
-                // TODO: Check also CPU distances ?
-                if (!results[i-from].finished) {
-                    correct++;
-                    avg_distance += results[i-from].distance;
-                    continue;
-                }
-
-                size_t toffset = sequences_metadata[i].text_offset;
-                size_t poffset = sequences_metadata[i].pattern_offset;
-
-                const char* text = &sequences_buffer[toffset];
-                const char* pattern = &sequences_buffer[poffset];
-
-                size_t tlen = sequences_metadata[i].text_len;
-                size_t plen = sequences_metadata[i].pattern_len;
-
-                int distance = results[i-from].distance;
-                char* cigar = recover_cigar(text, pattern, tlen,
-                                            plen, results[i-from].backtrace,
-                                            backtraces + backtraces_offloaded_elements*(i-from),
-                                            results[i-from]);
-
-                bool correct_cigar = check_cigar_edit(text, pattern, tlen, plen, cigar);
-                bool correct_affine_d = check_affine_distance(text, pattern, tlen,
-                                                              plen, distance,
-                                                              penalties, cigar);
-
-                if (!correct_cigar) {
-                    LOG_ERROR("Incorrect cigar %d (%d). Distance: %d. CIGAR: %s\n", i-from, i, distance, cigar);
-                }
-
-                avg_distance += distance;
-
-                if (correct_cigar && correct_affine_d) {
-                    correct++;
-                } else {
-                    incorrect++;
-                }
-                free(cigar);
+    // Check correctness if asked
+    if (check_correctness) {
+        LOG_DEBUG("Checking batch %d correctnes.", batch+1);
+        const uint32_t backtraces_offloaded_elements = BT_OFFLOADED_RESULT_ELEMENTS(max_distance);
+        float avg_distance = 0;
+        int correct = 0;
+        int incorrect = 0;
+        CLOCK_INIT()
+        CLOCK_START()
+        #pragma omp parallel for reduction(+:avg_distance,correct,incorrect)
+        for (int i=from; i<=to; i++) {
+            // TODO: Check also CPU distances ?
+            if (!results[i-from].finished) {
+                correct++;
+                avg_distance += results[i-from].distance;
+                continue;
             }
 
-            avg_distance /= curr_batch_size;
-            CLOCK_STOP()
-            LOG_INFO("(Batch %d) correct=%d Incorrect=%d Average score=%f (%.3f"
-                     " alignments per second checked)\n", batch, correct,
-                     incorrect, avg_distance, curr_batch_size/ CLOCK_SECONDS);
+            size_t toffset = sequences_metadata[i].text_offset;
+            size_t poffset = sequences_metadata[i].pattern_offset;
+
+            const char* text = &sequences_buffer[toffset];
+            const char* pattern = &sequences_buffer[poffset];
+
+            size_t tlen = sequences_metadata[i].text_len;
+            size_t plen = sequences_metadata[i].pattern_len;
+
+            int distance = results[i-from].distance;
+            char* cigar = recover_cigar(text, pattern, tlen,
+                                        plen, results[i-from].backtrace,
+                                        backtraces + backtraces_offloaded_elements*(i-from),
+                                        results[i-from]);
+
+            bool correct_cigar = check_cigar_edit(text, pattern, tlen, plen, cigar);
+            bool correct_affine_d = check_affine_distance(text, pattern, tlen,
+                                                          plen, distance,
+                                                          penalties, cigar);
+
+            if (!correct_cigar) {
+                LOG_ERROR("Incorrect cigar %d (%d). Distance: %d. CIGAR: %s\n", i-from, i, distance, cigar);
+            }
+
+            avg_distance += distance;
+
+            if (correct_cigar && correct_affine_d) {
+                correct++;
+            } else {
+                incorrect++;
+            }
+            free(cigar);
         }
 
+        avg_distance /= curr_batch_size;
+        CLOCK_STOP()
+        LOG_INFO("(Batch %d) correct=%d Incorrect=%d Average score=%f (%.3f"
+                 " alignments per second checked)\n", batch, correct,
+                 incorrect, avg_distance, curr_batch_size/ CLOCK_SECONDS);
     }
 
     cudaStreamDestroy(stream1);

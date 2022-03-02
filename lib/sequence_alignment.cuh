@@ -65,4 +65,12 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                               const int num_blocks,
                               cudaStream_t stream);
 
+void copyInResults (alignment_result_t* const results,
+                    const alignment_result_t* const results_d,
+                    wfa_backtrace_t* const backtraces,
+                    const wfa_backtrace_t* const bt_offloaded_d,
+                    const size_t num_alignments,
+                    const int max_steps,
+                    const int num_blocks,
+                    cudaStream_t stream);
 #endif
