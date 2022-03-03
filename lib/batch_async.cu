@@ -49,6 +49,7 @@ void launch_alignments_batched (const char* sequences_buffer,
                         const int threads_per_block,
                         const int num_blocks,
                         size_t batch_size,
+                        const int band,
                         bool check_correctness) {
     cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
 
@@ -202,6 +203,7 @@ void launch_alignments_batched (const char* sequences_buffer,
             max_distance,
             threads_per_block,
             num_blocks,
+            band,
             stream2
         );
 

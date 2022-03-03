@@ -166,7 +166,10 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                               const int max_steps,
                               const int threads_per_block,
                               const int num_blocks,
+                              int band,
                               cudaStream_t stream) {
+    // If band <= 0, make the alignment unbanded
+    if (band <= 0) band = 2 * max_steps + 1;
 
     size_t bt_offloaded_size = BT_OFFLOADED_ELEMENTS(max_steps) * num_blocks;
 
@@ -178,7 +181,6 @@ void launch_alignments_async (const char* packed_sequences_buffer,
     const int active_working_set = max(penalties.o+penalties.e, penalties.x) + 1;
     int offsets_elements = active_working_set * max_wf_size;
     offsets_elements = offsets_elements + (4 - (offsets_elements % 4));
-
 
     size_t sh_mem_size = \
                     // Wavefronts structs space
@@ -236,7 +238,8 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                                               bt_offloaded_results_d,
                                               results_d,
                                               next_alignment_idx,
-                                              max_sh_offsets_per_wf);
+                                              max_sh_offsets_per_wf,
+                                              band);
     CUDA_CHECK_ERR
 }
 

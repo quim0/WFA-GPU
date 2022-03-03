@@ -76,6 +76,7 @@ void test_one_alignment() {
         THREADS_PER_BLOCK,
         3, // Num blocks, make it bigger than 1 to test
         num_alignments, // Batch size
+        0, // Band
         false // check correctness
     );
 
@@ -97,6 +98,7 @@ void test_one_alignment() {
         THREADS_PER_BLOCK,
         3, // Num blocks, make it bigger than 1 to test
         num_alignments, // Batch size
+        0,
         false // check correctness
     );
 
@@ -182,6 +184,7 @@ void test_multiple_alignments_affine () {
         THREADS_PER_BLOCK,
         3, // Num blocks, make it bigger than 1 to test
         num_alignments, // Batch size
+        0, // Band
         false // check correctness
     );
 
@@ -281,6 +284,7 @@ void test_multiple_alignments_edit () {
         THREADS_PER_BLOCK,
         3, // Num blocks, make it bigger than 1 to test
         num_alignments, // Batch size
+        0, // Band
         false // check correctness
     );
 
@@ -352,6 +356,7 @@ void test_distance_zero() {
         THREADS_PER_BLOCK,
         3, // Num blocks, make it bigger than 1 to test
         num_alignments, // Batch size
+        0, // Band
         false // check correctness
     );
 
@@ -373,6 +378,7 @@ void test_distance_zero() {
         THREADS_PER_BLOCK,
         3, // Num blocks, make it bigger than 1 to test
         num_alignments, // Batch size
+        0, // Band
         false // check correctness
     );
 

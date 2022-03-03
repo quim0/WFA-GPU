@@ -51,7 +51,8 @@ __global__ void alignment_kernel (
                             wfa_backtrace_t* offloaded_backtraces_results,
                             alignment_result_t* results,
                             uint32_t* const next_alignment_idx,
-                            const size_t num_sh_offsets_per_wf);
+                            const size_t num_sh_offsets_per_wf,
+                            const int band);
 
 #define EWAVEFRONT_V(k,offset) ((offset)-(k))
 #define EWAVEFRONT_H(k,offset) (offset)

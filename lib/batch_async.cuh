@@ -42,23 +42,11 @@ void launch_alignments_batched (const char* sequences_buffer,
                         const int threads_per_block,
                         const int num_blocks,
                         size_t batch_size,
+                        const int band,
                         bool check_correctness);
 
 #if __cplusplus // end of extern "C"
 }
 #endif
-
-#if 0
-void launch_alignments (const char* sequences_buffer,
-                         const size_t sequences_buffer_size,
-                         const sequence_pair_t* sequences_metadata,
-                         const size_t num_alignments,
-                         const affine_penalties_t penalties,
-                         alignment_result_t* results,
-                         wfa_backtrace_t* backtraces,
-                         const int max_distance,
-                         const int threads_per_block);
-#endif
-
 
 #endif

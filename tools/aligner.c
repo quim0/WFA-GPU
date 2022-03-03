@@ -36,7 +36,7 @@
 #include <errno.h>
 #include <string.h>
 
-#define NUM_ARGUMENTS 8
+#define NUM_ARGUMENTS 9
 
 int main(int argc, char** argv) {
 
@@ -105,6 +105,14 @@ int main(int argc, char** argv) {
          .description = "Number of blocks ('workers') to be running on the GPU.",
          .short_arg = 'w',
          .long_arg = "workers",
+         .required = false,
+         .type = ARG_INT
+         },
+         // 8
+        {.name = "Band",
+         .description = "Wavefront band (max and min diagonal that will be computed).",
+         .short_arg = 'x',
+         .long_arg = "band",
          .required = false,
          .type = ARG_INT
          },
@@ -216,6 +224,18 @@ int main(int argc, char** argv) {
 
     LOG_INFO("Number of GPU workers = %d.", num_blocks)
 
+    int band;
+    if (options.options[8].parsed) {
+        band = options.options[8].value.int_val;
+        if (band <= 0) {
+            LOG_ERROR("Band must positive (band=%d).", band)
+            exit(-1);
+        }
+        LOG_INFO("Banded execution. Max diagonal: %d, Min diagonal: %d", band, -band)
+    } else {
+        band = -1;
+    }
+
     alignment_result_t* results = (alignment_result_t*)calloc(num_alignments, sizeof(alignment_result_t));
     uint32_t backtraces_offloaded_elements = BT_OFFLOADED_RESULT_ELEMENTS(max_distance);
     // TODO: * batch_size instead of * num_alignments (?)
@@ -239,61 +259,13 @@ int main(int argc, char** argv) {
         threads_per_block,
         num_blocks,
         batch_size,
+        band,
         check
     );
 
     CLOCK_STOP()
     printf("Alignment computed. Wall time: %.3fs (%.3f alignments per second)\n",
            CLOCK_SECONDS, num_alignments / CLOCK_SECONDS);
-
-    /*
-    float avg_distance = 0;
-    int correct = 0;
-    int incorrect = 0;
-
-    if (check) {
-        CLOCK_START()
-        printf("Checking correctness...\n");
-        #pragma omp parallel for reduction(+:avg_distance,correct,incorrect)
-        for (int i=0; i<num_alignments; i++) {
-            size_t toffset = sequence_reader.sequences_metadata[i].text_offset;
-            size_t poffset = sequence_reader.sequences_metadata[i].pattern_offset;
-
-            char* text = &sequence_reader.sequences_buffer[toffset];
-            char* pattern = &sequence_reader.sequences_buffer[poffset];
-
-            size_t tlen = sequence_reader.sequences_metadata[i].text_len;
-            size_t plen = sequence_reader.sequences_metadata[i].pattern_len;
-
-            int distance = results[i].distance;
-            char* cigar = recover_cigar(text, pattern, tlen,
-                                        plen,results[i].backtrace,
-                                        backtraces + backtraces_offloaded_elements*i,
-                                        results[i]);
-
-            bool correct_cigar = check_cigar_edit(text, pattern, tlen, plen, cigar);
-            bool correct_affine_d = check_affine_distance(text, pattern, tlen,
-                                                          plen, distance,
-                                                          penalties, cigar);
-
-            avg_distance += distance;
-
-            if (correct_cigar && correct_affine_d) {
-                correct++;
-            } else {
-                incorrect++;
-            }
-
-            free(cigar);
-        }
-
-        avg_distance /= num_alignments;
-        CLOCK_STOP()
-        printf("Correct=%d Incorrect=%d Average score=%f (%.3f alignments per"
-               " second checked)\n",
-               correct, incorrect, avg_distance, num_alignments / CLOCK_SECONDS);
-    }
-    */
 
     free(results);
     free(backtraces);

@@ -63,6 +63,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                               const int max_steps,
                               const int threads_per_block,
                               const int num_blocks,
+                              int band,
                               cudaStream_t stream);
 
 void copyInResults (alignment_result_t* const results,
