@@ -40,23 +40,26 @@ test-packing: tests/test_packing_kernel.cu wfa-cpu wfa-gpu-so
 test-alignment: tests/test_alignment_kernel.cu wfa-cpu wfa-gpu-so
 	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS_ALIGNER) $< utils/verification.c -lwfagpu $(ARGS_WFA_CPU) -o $@
 
-wfa-gpu-so: $(SRC_LIB)
+wfa-gpu-so: $(SRC_LIB) external/WFA
 	mkdir -p build
-	$(NVCC) $(NVCC_OPTIONS) $(ARGS) -Xcompiler -fPIC -dc $^
+	$(NVCC) $(NVCC_OPTIONS) $(ARGS) -Xcompiler -fPIC -dc $(SRC_LIB)
 	mv *.o build/
 	$(NVCC) $(NVCC_OPTIONS) -shared -o build/libwfagpu.so build/*.o -lcudart
 
-wfa-gpu-debug-so: $(SRC_LIB)
+wfa-gpu-debug-so: $(SRC_LIB) external/WFA
 	mkdir -p build
-	$(NVCC) $(NVCC_OPTIONS) -g -G -DDEBUG $(ARGS) -Xcompiler -fPIC -dc $^
+	$(NVCC) $(NVCC_OPTIONS) -g -G -DDEBUG $(ARGS) -Xcompiler -fPIC -dc $(SRC_LIB)
 	mv *.o build/
 	$(NVCC) $(NVCC_OPTIONS) -shared -o build/libwfagpu.so build/*.o -lcudart
 
-wfa-gpu-profile-so: $(SRC_LIB)
+wfa-gpu-profile-so: $(SRC_LIB) external/WFA
 	mkdir -p build
-	$(NVCC) $(NVCC_OPTIONS) -lineinfo $(ARGS) -Xcompiler -fPIC -dc $^
+	$(NVCC) $(NVCC_OPTIONS) -lineinfo $(ARGS) -Xcompiler -fPIC -dc $(SRC_LIB)
 	mv *.o build/
 	$(NVCC) $(NVCC_OPTIONS) -lineinfo -shared -o build/libwfagpu.so build/*.o -lcudart
+
+external/WFA:
+	$(MAKE) -C $@
 
 wfa-cpu: $(SRC_WFA_CPU)
 	mkdir -p build
@@ -73,3 +76,5 @@ wfa-gpu: $(SRC_LIB) wfa-cpu
 
 clean:
 	rm -rf build/ bin/
+
+.PHONY: external/WFA
