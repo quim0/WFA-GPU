@@ -46,6 +46,7 @@ typedef union {
 typedef struct {
     char* name;
     char* description;
+    uint32_t category;
     char short_arg; // -a without the "-"
     char* long_arg; // --arg without the "--"
     bool required;
@@ -57,8 +58,11 @@ typedef struct {
 typedef struct {
     option_t* options;
     int len;
+    const char** categories;
+    int num_categories;
 } options_t;
 
+option_t* get_option (const options_t options, char short_arg);
 bool parse_args (const int argc, char** argv, options_t options);
 void print_usage (const options_t options);
 

@@ -37,15 +37,29 @@
 #include <string.h>
 
 #define NUM_ARGUMENTS 9
+#define NUM_CATEGORIES 3
+
+typedef enum {
+    CAT_IO,
+    CAT_ALIGN,
+    CAT_SYS
+} menu_categories_t;
+
+const char* menu_categories[] = {
+    "Input/Output",      // 0
+    "Alignment Options", // 1
+    "System"             // 2
+};
 
 int main(int argc, char** argv) {
 
     option_t options_arr[NUM_ARGUMENTS] = {
         // 0
-        {.name = "Sequences file",
+        {.name = "Input sequences file",
          .description = "File containing the sequences to align.",
-         .short_arg = 'f',
-         .long_arg = "file",
+         .category = CAT_IO,
+         .short_arg = 'i',
+         .long_arg = "input",
          .required = true,
          .type = ARG_STR
          },
@@ -53,6 +67,7 @@ int main(int argc, char** argv) {
         {.name = "Number of alignments",
          .description = "Number of alignments to read from the file (default=all"
                         " alignments)",
+         .category = CAT_IO,
          .short_arg = 'n',
          .long_arg = "num-alignments",
          .required = false,
@@ -61,6 +76,7 @@ int main(int argc, char** argv) {
         // 2
         {.name = "Affine penalties",
          .description = "Gap-affine penalties for the alignment, in format x,o,e",
+         .category = CAT_ALIGN,
          .short_arg = 'g',
          .long_arg = "affine-penalties",
          .required = true,
@@ -69,32 +85,37 @@ int main(int argc, char** argv) {
         // 3
         {.name = "Check",
          .description = "Check for alignment correctness",
+         .category = CAT_SYS,
          .short_arg = 'c',
          .long_arg = "check",
          .required = false,
          .type = ARG_NO_VALUE
          },
         // 4
-        {.name = "Maximum distance allowed",
-         .description = "Maximum distance that the kernel will be able to "
-                        "compute (default = maximum distance of first alignment)",
-         .short_arg = 'd',
+        {.name = "Maximum error allowed",
+         .description = "Maximum error that the kernel will be able to "
+                        "compute (default = maximum possible error of first "
+                        "alignment)",
+         .category = CAT_ALIGN,
+         .short_arg = 'e',
          .long_arg = "max-distance",
          .required = false,
          .type = ARG_INT
          },
         // 5
-        {.name = "Number of threads per alginment",
-         .description = "Number of threads per block, each block computes one"
-                        " alignment",
+        {.name = "Number of CUDA threads per alginment",
+         .description = "Number of CUDA threads per block, each block computes"
+                        " one or multiple alignment",
+         .category = CAT_SYS,
          .short_arg = 't',
-         .long_arg = "threads",
+         .long_arg = "threads-per-block",
          .required = false,
          .type = ARG_INT
          },
          // 6
         {.name = "Batch size",
          .description = "Number of alignments per batch.",
+         .category = CAT_ALIGN,
          .short_arg = 'b',
          .long_arg = "batch-size",
          .required = false,
@@ -103,6 +124,7 @@ int main(int argc, char** argv) {
          // 7
         {.name = "GPU workers",
          .description = "Number of blocks ('workers') to be running on the GPU.",
+         .category = CAT_SYS,
          .short_arg = 'w',
          .long_arg = "workers",
          .required = false,
@@ -110,8 +132,9 @@ int main(int argc, char** argv) {
          },
          // 8
         {.name = "Band",
-         .description = "Wavefront band (max and min diagonal that will be computed).",
-         .short_arg = 'x',
+         .description = "Wavefront band (highest and lower diagonal that will be computed).",
+         .category = CAT_ALIGN,
+         .short_arg = 'B',
          .long_arg = "band",
          .required = false,
          .type = ARG_INT
@@ -135,7 +158,7 @@ int main(int argc, char** argv) {
 
     free(device_name);
 
-    options_t options = {options_arr, NUM_ARGUMENTS};
+    options_t options = {options_arr, NUM_ARGUMENTS, menu_categories, NUM_CATEGORIES};
 
     bool success = parse_args(argc, argv, options);
     if (!success) {
@@ -144,20 +167,21 @@ int main(int argc, char** argv) {
     }
 
     sequence_reader_t sequence_reader = {0};
-    char* sequences_file = options.options[0].value.str_val;
+    char* sequences_file = get_option(options, 'i')->value.str_val;
     init_sequence_reader(&sequence_reader, sequences_file);
 
     size_t sequences_read = 0;
-    if (options.options[1].parsed) {
-        sequences_read = options.options[1].value.int_val * 2;
+    option_t* opt_sequences_read = get_option(options, 'n');
+    if (opt_sequences_read->parsed) {
+        sequences_read = opt_sequences_read->value.int_val * 2;
     }
 
-    bool check = options.options[3].parsed;
+    bool check = get_option(options, 'c')->parsed;
 
     affine_penalties_t penalties = {0};
     // TODO: This is insecure but works for now, parse it better
     int x, o, e;
-    sscanf(options.options[2].value.str_val, "%d,%d,%d", &x, &o, &e);
+    sscanf(get_option(options, 'g')->value.str_val, "%d,%d,%d", &x, &o, &e);
 
     penalties.x = x;
     penalties.o = o;
@@ -174,8 +198,9 @@ int main(int argc, char** argv) {
     DEBUG_CLOCK_STOP("File read.")
 
     int max_distance;
-    if (options.options[4].parsed) {
-        max_distance = options.options[4].value.int_val;
+    option_t* opt_max_distance = get_option(options, 'e');
+    if (opt_max_distance->parsed) {
+        max_distance = opt_max_distance->value.int_val;
     } else {
         max_distance = sequence_reader.sequences_metadata[0].text_len
                        + sequence_reader.sequences_metadata[0].pattern_len;
@@ -183,8 +208,9 @@ int main(int argc, char** argv) {
 
     // Threads per block
     int threads_per_block;
-    if (options.options[5].parsed) {
-        threads_per_block = options.options[5].value.int_val;
+    option_t* opt_tpb = get_option(options, 't');
+    if (opt_tpb->parsed) {
+        threads_per_block = opt_tpb->value.int_val;
     } else {
         // TODO: Arbitrary number of threads
         threads_per_block = 512;
@@ -196,8 +222,9 @@ int main(int argc, char** argv) {
     size_t num_alignments = sequence_reader.num_sequences_read / 2;
 
     int batch_size;
-    if (options.options[6].parsed) {
-        batch_size = options.options[6].value.int_val;
+    option_t* opt_batch_size = get_option(options, 'b');
+    if (opt_batch_size->parsed) {
+        batch_size = opt_batch_size->value.int_val;
     } else {
         batch_size = num_alignments;
     }
@@ -210,8 +237,9 @@ int main(int argc, char** argv) {
     LOG_INFO("Batch size = %d.", batch_size)
 
     int num_blocks;
-    if (options.options[7].parsed) {
-        num_blocks = options.options[7].value.int_val;
+    option_t* opt_num_blocks = get_option(options, 'w');
+    if (opt_num_blocks->parsed) {
+        num_blocks = opt_num_blocks->value.int_val;
     } else {
         // TODO: Get this from num_threads and GPU capabilities
         num_blocks = 68;
@@ -225,8 +253,9 @@ int main(int argc, char** argv) {
     LOG_INFO("Number of GPU workers = %d.", num_blocks)
 
     int band;
-    if (options.options[8].parsed) {
-        band = options.options[8].value.int_val;
+    option_t* opt_band = get_option(options, 'B');
+    if (opt_band->parsed) {
+        band = opt_band->value.int_val;
         if (band <= 0) {
             LOG_ERROR("Band must positive (band=%d).", band)
             exit(-1);
