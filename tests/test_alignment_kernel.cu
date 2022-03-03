@@ -74,6 +74,7 @@ void test_one_alignment() {
         backtraces,
         MAX_STEPS,
         THREADS_PER_BLOCK,
+        3, // Num blocks, make it bigger than 1 to test
         num_alignments, // Batch size
         false // check correctness
     );
@@ -94,6 +95,7 @@ void test_one_alignment() {
         backtraces,
         MAX_STEPS,
         THREADS_PER_BLOCK,
+        3, // Num blocks, make it bigger than 1 to test
         num_alignments, // Batch size
         false // check correctness
     );
@@ -178,6 +180,7 @@ void test_multiple_alignments_affine () {
         backtraces,
         MAX_STEPS,
         THREADS_PER_BLOCK,
+        3, // Num blocks, make it bigger than 1 to test
         num_alignments, // Batch size
         false // check correctness
     );
@@ -276,6 +279,7 @@ void test_multiple_alignments_edit () {
         backtraces,
         MAX_STEPS,
         THREADS_PER_BLOCK,
+        3, // Num blocks, make it bigger than 1 to test
         num_alignments, // Batch size
         false // check correctness
     );
@@ -303,6 +307,81 @@ void test_multiple_alignments_edit () {
     free(sequence_unpacked);
     free(sequence_metadata);
     free(results);
+    free(backtraces);
+
+    cudaDeviceSynchronize();
+}
+
+void test_distance_zero() {
+    // One sequence test
+    size_t seq_buf_size = 32;
+    char* sequence_unpacked = (char*)calloc(seq_buf_size, 1);
+    sequence_pair_t* sequence_metadata = (sequence_pair_t*)calloc(1, sizeof(sequence_pair_t));
+    if (!sequence_unpacked || !sequence_metadata) {
+        LOG_ERROR("Can not allocate memory");
+        exit(-1);
+    }
+
+    sequence_metadata[0].pattern_offset = 0;
+    sequence_metadata[0].pattern_len = 7;
+    strcpy(sequence_unpacked, "GATTACA");
+
+    sequence_metadata[0].text_offset = 12;
+    sequence_metadata[0].text_len = 7;
+    strcpy(sequence_unpacked + sequence_metadata[0].text_offset, "GATTACA");
+    size_t num_alignments = 1;
+
+    affine_penalties_t penalties = {.x = 2, .o = 3, .e = 1};
+    // Only one sequence in this test
+    alignment_result_t results = {0};
+
+    wfa_backtrace_t* backtraces = (wfa_backtrace_t*)calloc(
+                                                    BT_OFFLOADED_RESULT_ELEMENTS(MAX_STEPS),
+                                                    sizeof(wfa_backtrace_t)
+                                                    );
+
+    launch_alignments_batched(
+        sequence_unpacked,
+        seq_buf_size,
+        sequence_metadata,
+        num_alignments,
+        penalties,
+        &results,
+        backtraces,
+        MAX_STEPS,
+        THREADS_PER_BLOCK,
+        3, // Num blocks, make it bigger than 1 to test
+        num_alignments, // Batch size
+        false // check correctness
+    );
+
+    cudaDeviceSynchronize();
+
+    TEST_ASSERT(results.distance == 0)
+
+    penalties = {.x = 1, .o = 0, .e = 1};
+
+    launch_alignments_batched(
+        sequence_unpacked,
+        seq_buf_size,
+        sequence_metadata,
+        num_alignments,
+        penalties,
+        &results,
+        backtraces,
+        MAX_STEPS,
+        THREADS_PER_BLOCK,
+        3, // Num blocks, make it bigger than 1 to test
+        num_alignments, // Batch size
+        false // check correctness
+    );
+
+    cudaDeviceSynchronize();
+
+    TEST_ASSERT(results.distance == 0)
+
+    free(sequence_unpacked);
+    free(sequence_metadata);
     free(backtraces);
 
     cudaDeviceSynchronize();
