@@ -204,6 +204,13 @@ int main(int argc, char** argv) {
     } else {
         max_distance = sequence_reader.sequences_metadata[0].text_len
                        + sequence_reader.sequences_metadata[0].pattern_len;
+        max_distance /= 1.5;
+        if (max_distance > 10000) {
+            LOG_WARN("Automatically genereated maximum error supported by the"
+                     " kernel seems to be very high, to avoid running out of "
+                     "memory, consider limiting the maximum error with the "
+                     "'-e' argument.");
+        }
     }
 
     // Threads per block
@@ -212,8 +219,14 @@ int main(int argc, char** argv) {
     if (opt_tpb->parsed) {
         threads_per_block = opt_tpb->value.int_val;
     } else {
-        // TODO: Arbitrary number of threads
-        threads_per_block = 512;
+        // If it is not provided by the user, use the maximum distance as a
+        // hint.
+        const size_t max_wf_size = 2 * max_distance + 1;
+        if (max_wf_size <= 96)       threads_per_block = 64;
+        else if (max_wf_size <= 192) threads_per_block = 128;
+        else if (max_wf_size <= 380) threads_per_block = 256;
+        else if (max_wf_size <= 768) threads_per_block = 512;
+        else                         threads_per_block = 1024;
     }
 
     LOG_INFO("Penalties: M=0, X=%d, O=%d, E=%d. Maximum distance: %d",
@@ -242,7 +255,11 @@ int main(int argc, char** argv) {
         num_blocks = opt_num_blocks->value.int_val;
     } else {
         // TODO: Get this from num_threads and GPU capabilities
-        num_blocks = 68;
+        const int num_sm = get_cuda_SM_count(0);
+        const int warps_per_block = threads_per_block / 32;
+        // Assume we can get an occupancy of 32 warps / block
+        const int blocks_per_sm = 32 / warps_per_block;
+        num_blocks = num_sm * blocks_per_sm;
     }
 
     if (num_blocks <= 0) {

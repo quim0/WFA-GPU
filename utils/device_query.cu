@@ -37,6 +37,13 @@ char* get_cuda_dev_name(int dev) {
     return strdup(deviceProp.name);
 }
 
+int get_cuda_SM_count(int dev) {
+    cudaDeviceProp deviceProp;
+    cudaGetDeviceProperties(&deviceProp, dev);
+    CUDA_CHECK_ERR
+    return deviceProp.multiProcessorCount;
+}
+
 void get_cuda_capability(int dev, int* major, int* minor) {
     cudaDeviceProp deviceProp;
     cudaGetDeviceProperties(&deviceProp, dev);

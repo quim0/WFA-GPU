@@ -29,6 +29,7 @@ extern "C" {
 void get_num_cuda_devices(int* n);
 // Returned string should be freed
 char* get_cuda_dev_name(int dev);
+int get_cuda_SM_count(int dev);
 void get_cuda_capability(int dev, int* major, int* minor);
 
 #if __cplusplus

@@ -45,4 +45,10 @@
     fprintf(stderr, "INFO: %s (%s:%d)\n", tmp, __FILE__, __LINE__); \
     }
 
+#define LOG_WARN(...) {\
+    char tmp[1024];\
+    snprintf(tmp, 1024, __VA_ARGS__); \
+    fprintf(stderr, "[!] WARNING: %s (%s:%d)\n", tmp, __FILE__, __LINE__); \
+    }
+
 #endif
