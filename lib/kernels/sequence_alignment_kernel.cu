@@ -575,6 +575,17 @@ __global__ void alignment_kernel (
         const size_t base_offset_packed = curr_batch_alignment_base.pattern_offset_packed;
 
         const sequence_pair_t metadata = sequences_metadata[alignment_idx];
+        // Sequences with "N" chatacters not supported yet
+        if (metadata.has_N) {
+            if (tid == 0) {
+                results[alignment_idx].distance = 0;
+                results[alignment_idx].finished = false;
+                alignment_idx = get_alignment_idx(next_alignment_idx);
+            }
+            __syncthreads();
+            continue;
+        }
+
         const char* text = packed_sequences_buffer + metadata.text_offset_packed - base_offset_packed;
         const char* pattern = packed_sequences_buffer + metadata.pattern_offset_packed - base_offset_packed ;
         const int tlen = metadata.text_len;

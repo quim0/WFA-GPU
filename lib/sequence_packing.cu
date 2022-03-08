@@ -95,7 +95,7 @@ void prepare_pack_sequences_gpu (const char* sequences_buffer,
 
 void pack_sequences_gpu_async (const char* const d_sequences_buffer_unpacked,
                                char* const d_sequences_buffer_packed,
-                               const sequence_pair_t* d_sequences_metadata,
+                               sequence_pair_t* const d_sequences_metadata,
                                size_t num_alignments,
                                cudaStream_t stream) {
 

@@ -148,6 +148,8 @@ bool read_n_sequences (sequence_reader_t* reader, size_t* n) {
         sequence_pair_t* curr_alignment = \
                     &(reader->sequences_metadata[curr_sequence_idx / 2]);
 
+        curr_alignment->has_N = false;
+
         if ((curr_sequence_idx % 2) == 0) {
             // Next alignment, read PATTERN
             if (curr_read_size <= 2 || lineptr[0] != '>') {

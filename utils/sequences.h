@@ -29,6 +29,7 @@ typedef struct {
     size_t pattern_offset_packed;
     unsigned int text_len;
     unsigned int pattern_len;
+    bool has_N; // True if sequences contains "N" characters
 } sequence_pair_t;
 
 #endif
