@@ -51,6 +51,18 @@ speedups, at the expense of potentially loosing some accuracy in corner cases.
 
 TODO
 
+## Possible errors
+
+#### cudaErrorLaunchTimeout
+
+When there is a screen connected, the maximum kernel time is 5 seconds. Disable the GUI or choose a smaller batch size to reduce kernel execution time.
+On Ubuntu based systems, the GUI can be disabled with the command `sudo systemctl isolate multi-user.target` (keep in mind that this will close all applications on your desktop environment such as browsers, text-editors... etc).
+
+#### Out of memory
+
+The program is trying to use too much memory. Decrease batch size or maximum error supported by the kernel. The aligner tool stores all sequences to main memory
+before starting the alignment on the GPU, if your machine does not have enough memory, it can also raise an out-of-memory error on the CPU side.
+
 ## Problems and suggestions
 
 Open an issue on Github or contact with the main developer: Quim Aguado-Puig (quim.aguado.p@gmail.com)
