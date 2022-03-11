@@ -123,8 +123,13 @@ __device__ bt_prev_t offload_backtrace (unsigned int* const last_free_bt_positio
                                        wfa_backtrace_t* const global_backtraces_array) {
     const bt_prev_t old_val = atomicAdd(last_free_bt_position, 1);
 
+#if __CUDA_ARCH__ >= 800
     __stwt(&global_backtraces_array[old_val].backtrace, backtrace_vector);
     __stwt(&global_backtraces_array[old_val].prev, backtrace_pointer);
+#else
+    global_backtraces_array[old_val].backtrace = backtrace_vector;
+    global_backtraces_array[old_val].prev = backtrace_pointer;
+#endif
 
     // TODO: Check if new_val is more than 32 bits
     return old_val;
@@ -600,7 +605,11 @@ __global__ void alignment_kernel (
 
         // Initialize all wavefronts to NULL
         for (int i=tid; i<(offsets_size * 3); i+=blockDim.x) {
+#if __CUDA_ARCH__ >= 800
             __stwt(&M_base[i], OFFSET_NULL);
+#else
+            M_base[i] = OFFSET_NULL;
+#endif
         }
         // Shared mem
         for (int i=tid; i<(num_sh_offsets_per_wf * active_working_set_size * 3); i+=blockDim.x) {
@@ -609,12 +618,21 @@ __global__ void alignment_kernel (
 
         // Initialise all backtrace vectors to 0
         for (int i=tid; i<(bt_size * 3); i+=blockDim.x) {
+#if __CUDA_ARCH__ >= 800
             __stwt(&M_bt_vector_base[i], 0);
+#else
+            M_bt_vector_base[i] = 0;
+
+#endif
         }
 
         // Initialise all backtrace pointers to 0
         for (int i=tid; i<(bt_size * 3); i+=blockDim.x) {
+#if __CUDA_ARCH__ >= 800
             __stwt(&M_bt_prev_base[i], 0);
+#else
+            M_bt_prev_base[i] = 0;
+#endif
         }
 
         for (int i=tid; i<active_working_set_size; i+=blockDim.x) {

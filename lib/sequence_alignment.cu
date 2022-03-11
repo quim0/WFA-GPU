@@ -193,6 +193,9 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                                             penalties,
                                             max_steps,
                                             threads_per_block) - sh_mem_size;
+    // Using 100% of the shared memory available can give some problems, as the
+    // driver sometimes take some sh memory space (?)
+    available_sh_mem_per_block *= 0.95;
 
     const int max_sh_offsets_per_block = available_sh_mem_per_block / sizeof(wfa_offset_t);
     int max_sh_offsets_per_wf = max_sh_offsets_per_block / (active_working_set * 3);

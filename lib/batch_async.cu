@@ -212,6 +212,7 @@ void launch_alignments_batched (const char* sequences_buffer,
         // CPU, while the current batch alignments are computed.
         if (batch > 0) {
             int alignments_computed_cpu = 0;
+            #pragma omp parallel for
             for (int i=0; i<prev_curr_batch_size; i++) {
                 int real_i = i + prev_from;
                 if (!results[i].finished) {

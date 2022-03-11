@@ -42,7 +42,7 @@ test-alignment: tests/test_alignment_kernel.cu wfa-cpu wfa-gpu-so
 
 wfa-gpu-so: $(SRC_LIB) external/WFA
 	mkdir -p build
-	$(NVCC) $(NVCC_OPTIONS) $(ARGS) -Xcompiler -fPIC -dc $(SRC_LIB)
+	$(NVCC) $(NVCC_OPTIONS) $(ARGS) -Xcompiler -fPIC -Xcompiler -fopenmp -dc $(SRC_LIB)
 	mv *.o build/
 	$(NVCC) $(NVCC_OPTIONS) -shared -o build/libwfagpu.so build/*.o -lcudart
 
