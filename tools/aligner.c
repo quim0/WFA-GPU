@@ -183,6 +183,10 @@ int main(int argc, char** argv) {
     int x, o, e;
     sscanf(get_option(options, 'g')->value.str_val, "%d,%d,%d", &x, &o, &e);
 
+    if (x < 0) x *= -1;
+    if (o < 0) o *= -1;
+    if (e < 0) e *= -1;
+
     penalties.x = x;
     penalties.o = o;
     penalties.e = e;
