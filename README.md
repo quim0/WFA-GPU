@@ -44,7 +44,7 @@ Choosing the correct alignment and system options is key for performance. The bi
 may have additional information to make a better choise. It is specially important to limit the maximum error supported by the kernel as much as
 possible (`-e` parameter), this contrains the memory used per alignment, and helps the program to choose better block and grid sizes. Keep in mind that any alignment having an error higher than the specified with the `-e` argument will be computed on the CPU, so, if this argument is too small, performance can decrease.
 
-For big alignments, setting a band (i.e. limiting the maximum and minimum distance of the wavefronts) with the `-B` argument can give significant
+For big alignments, setting a band (i.e. limiting the maximum and minimum diagonal of the wavefronts) with the `-B` argument can give significant
 speedups, at the expense of potentially loosing some accuracy in corner cases.
 
 ## Examples
