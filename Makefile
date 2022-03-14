@@ -17,16 +17,16 @@ NVCC_OPTIONS=-O3 -maxrregcount=64 -gencode arch=compute_$(COMPUTE),code=sm_$(SM)
 aligner: wfa-cpu wfa-gpu-so $(SRC_ALIGNER)
 	mkdir -p bin
 # Link static library, could be possible to link dynamic library too
-	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -Lexternal/WFA/lib/ -O3 -o bin/wfa.affine.gpu -lwfagpu -lwfa
+	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -Lexternal/WFA/lib/ -O3 -o bin/wfa.affine.gpu -lwfagpu -lwfa -lm
 	echo "!! Before running put `pwd`/build in LD_LIBRARY_PATH env variable."
 
 aligner-debug: wfa-cpu wfa-gpu-debug-so $(SRC_ALIGNER)
 	mkdir -p bin
-	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -ggdb -DDEBUG -Lexternal/WFA/build/ -o bin/wfa.affine.gpu -lwfagpu -lwfa
+	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -ggdb -DDEBUG -Lexternal/WFA/lib/ -o bin/wfa.affine.gpu -lwfagpu -lwfa -lm
 
 aligner-profile: wfa-cpu wfa-gpu-profile-so $(SRC_ALIGNER)
 	mkdir -p bin
-	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -Lexternal/WFA/build/ -o bin/wfa.affine.gpu -lwfagpu -lwfa
+	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -Lexternal/WFA/lib/ -o bin/wfa.affine.gpu -lwfagpu -lwfa -lm
 
 run-tests:
 	for f in bin/test-*; do ./$$f; done
