@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: WaveFront components module
  */
@@ -44,9 +44,12 @@ typedef struct {
   // Configuration
   bool memory_modular;                         // Memory strategy (modular wavefronts)
   bool bt_piggyback;                           // Backtrace Piggyback
-  // Wavefronts
+  // Wavefronts dimensions
   int num_wavefronts;                          // Total number of allocated wavefronts
   int max_score_scope;                         // Maximum score-difference between dependent wavefronts
+  int historic_max_hi;                         // Maximum WF hi-limit seen during current alignment
+  int historic_min_lo;                         // Minimum WF lo-limit seen during current alignment
+  // Wavefronts
   wavefront_t** mwavefronts;                   // M-wavefronts
   wavefront_t** i1wavefronts;                  // I1-wavefronts
   wavefront_t** i2wavefronts;                  // I2-wavefronts

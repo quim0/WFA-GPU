@@ -7,9 +7,11 @@ FOLDER_BUILD=../build
 ###############################################################################
 # Modules
 ###############################################################################
-MODULES=commons \
+MODULES=bitmap \
+        commons \
         dna_text \
         heatmap \
+        sequence_buffer \
         string_padded \
         vector
 

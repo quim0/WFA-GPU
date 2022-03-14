@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,13 +24,13 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: Padded string module to avoid handling corner conditions
  */
 
-#ifndef STRING_PADDED_H
-#define STRING_PADDED_H
+#ifndef STRING_PADDED_H_
+#define STRING_PADDED_H_
 
 /*
  * Includes
@@ -74,4 +74,4 @@ strings_padded_t* strings_padded_new_rhomb(
 void strings_padded_delete(
     strings_padded_t* const strings_padded);
 
-#endif /* STRING_PADDED_H */
+#endif /* STRING_PADDED_H_ */

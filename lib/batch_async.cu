@@ -54,6 +54,7 @@ void launch_alignments_batched (const char* sequences_buffer,
     cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
 
     if (batch_size == 0) batch_size = num_alignments;
+    if (batch_size > num_alignments) batch_size = num_alignments;
 
     int num_batchs = ceil((double)num_alignments / batch_size);
 
@@ -211,31 +212,14 @@ void launch_alignments_batched (const char* sequences_buffer,
         // Compute previous batch alignments that need to be offloaded to
         // CPU, while the current batch alignments are computed.
         if (batch > 0) {
-            int alignments_computed_cpu = 0;
-            #pragma omp parallel for
-            for (int i=0; i<prev_curr_batch_size; i++) {
-                int real_i = i + prev_from;
-                if (!results[i].finished) {
-                    alignments_computed_cpu++;
-
-                    size_t toffset = sequences_metadata[real_i].text_offset;
-                    size_t poffset = sequences_metadata[real_i].pattern_offset;
-
-                    const char* text = &sequences_buffer[toffset];
-                    const char* pattern = &sequences_buffer[poffset];
-
-                    size_t tlen = sequences_metadata[real_i].text_len;
-                    size_t plen = sequences_metadata[real_i].pattern_len;
-
-                    results[i].distance = compute_alignment_cpu(
-                        pattern, text,
-                        plen, tlen,
-                        penalties.x, penalties.o, penalties.e
+            int alignments_computed_cpu = compute_alignments_cpu_threaded(
+                    prev_curr_batch_size,
+                    prev_from,
+                    results,
+                    sequences_metadata,
+                    sequences_buffer,
+                    penalties.x, penalties.o, penalties.e
                     );
-
-                    // TODO: CIGAR ?
-                }
-            }
 
             if (alignments_computed_cpu > 0) {
                 LOG_INFO("(Batch %d) %d/%d alignemnts could not be computed on the"
@@ -252,9 +236,8 @@ void launch_alignments_batched (const char* sequences_buffer,
                 int incorrect = 0;
                 CLOCK_INIT()
                 CLOCK_START()
-                #pragma omp parallel for reduction(+:avg_distance,correct,incorrect)
+                #pragma omp parallel for reduction(+:avg_distance,correct,incorrect) schedule(dynamic)
                 for (int i=prev_from; i<=prev_to; i++) {
-                    // TODO: Check also CPU distances ?
                     if (!results[i-prev_from].finished) {
                         correct++;
                         avg_distance += results[i-prev_from].distance;
@@ -285,9 +268,28 @@ void launch_alignments_batched (const char* sequences_buffer,
                         LOG_ERROR("Incorrect cigar %d (%d). Distance: %d. CIGAR: %s\n", i-prev_from, i, distance, cigar);
                     }
 
+
+                    int cpu_computed_distance = compute_alignment_cpu(
+                        pattern, text,
+                        plen, tlen,
+                        penalties.x, penalties.o, penalties.e
+                    );
+
+                    bool gpu_distance_ok = (distance == cpu_computed_distance);
+                    if (!gpu_distance_ok) {
+                        LOG_ERROR("Incorrect distance (%d). GPU=%d, CPU=%d", i, distance, cpu_computed_distance)
+                        printf("pattern: %s\ntext: %s\nplen=%zu, tlen=%zu\n", pattern, text, plen, tlen);
+                        printf("GPU cigar: %s\n", cigar);
+                        pprint_cigar_cpu(
+                            pattern, text, plen, tlen,
+                            penalties.x, penalties.o, penalties.e
+                        );
+                        printf("\n");
+                    }
+
                     avg_distance += distance;
 
-                    if (correct_cigar && correct_affine_d) {
+                    if (correct_cigar && correct_affine_d && gpu_distance_ok) {
                         correct++;
                     } else {
                         incorrect++;

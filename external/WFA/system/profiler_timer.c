@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * VERSION: v20.10.14
  * DESCRIPTION: Simple time profiler
@@ -107,10 +107,9 @@ uint64_t timer_get_variance(const profiler_timer_t* const timer) {
 uint64_t timer_get_stddev(const profiler_timer_t* const timer) {
   return counter_get_stddev(&timer->time_ns);
 }
-void timer_print(
+void timer_print_total(
     FILE* const stream,
-    const profiler_timer_t* const timer,
-    const profiler_timer_t* const ref_timer) {
+    const profiler_timer_t* const timer) {
   const uint64_t total_time_ns = timer_get_total_ns(timer);
   // Print Total
   if (total_time_ns >= 60000000000ull) {
@@ -124,6 +123,14 @@ void timer_print(
   } else {
     fprintf(stream,"%7" PRIu64 " ns",total_time_ns);
   }
+}
+void timer_print(
+    FILE* const stream,
+    const profiler_timer_t* const timer,
+    const profiler_timer_t* const ref_timer) {
+  const uint64_t total_time_ns = timer_get_total_ns(timer);
+  // Print Total
+  timer_print_total(stream,timer);
   // Print percentage wrt reference
   if (ref_timer!=NULL) {
     if (total_time_ns==0) {

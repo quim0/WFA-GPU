@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: WaveFront alignment module for computing wavefronts
  */
@@ -35,40 +35,18 @@
 #include "wavefront_aligner.h"
 
 /*
- * Compute wavefront offsets
- */
-#define WF_DECLARE_OFFSETS(wavefront,prefix) \
-  const wf_offset_t* const prefix = wavefront->offsets
-#define WF_DECLARE_OFFSETS__LIMITS(wavefront,prefix) \
-  WF_DECLARE_OFFSETS(wavefront,prefix); \
-  const int prefix ## _hi = wavefront->hi; \
-  const int prefix ## _lo = wavefront->lo
-#define WF_DECLARE_BACKTRACES(wavefront,prefix) \
-  const wf_backtrace_block_t* const prefix = wavefront->backtrace
-
-#define WF_COND_FETCH(prefix,index) \
-  (prefix ## _lo <= (index) && (index) <= prefix ## _hi) ? (prefix[index]) : WAVEFRONT_OFFSET_NULL
-#define WF_COND_FETCH_INC(prefix,index,inc) \
-  (prefix ## _lo <= (index) && (index) <= prefix ## _hi) ? (prefix[index]+inc) : WAVEFRONT_OFFSET_NULL
-
-/*
  * Compute limits
  */
 void wavefront_compute_limits(
+    wavefront_aligner_t* const wf_aligner,
     const wavefront_set_t* const wavefront_set,
-    const distance_metric_t distance_metric,
-    int* const lo_effective,
-    int* const hi_effective);
-void wavefront_compute_limits_dense(
-    const wavefront_set_t* const wavefront_set,
-    const distance_metric_t distance_metric,
     int* const lo,
     int* const hi);
 
 /*
  * Input wavefronts (fetch)
  */
-void wavefront_aligner_fetch_input(
+void wavefront_compute_fetch_input(
     wavefront_aligner_t* const wf_aligner,
     wavefront_set_t* const wavefront_set,
     const int score);
@@ -76,10 +54,10 @@ void wavefront_aligner_fetch_input(
 /*
  * Output wavefronts (allocate)
  */
-void wavefront_aligner_allocate_output_null(
+void wavefront_compute_allocate_output_null(
     wavefront_aligner_t* const wf_aligner,
     int score);
-void wavefront_aligner_allocate_output(
+void wavefront_compute_allocate_output(
     wavefront_aligner_t* const wf_aligner,
     wavefront_set_t* const wavefront_set,
     int score,
@@ -87,10 +65,22 @@ void wavefront_aligner_allocate_output(
     const int hi);
 
 /*
+ * Initialize wavefronts ends
+ */
+void wavefront_compute_init_ends(
+    wavefront_aligner_t* const wf_aligner,
+    wavefront_set_t* const wavefront_set,
+    const int lo,
+    const int hi);
+
+/*
  * Trim wavefronts ends
  */
-void wavefront_aligner_trim_ends(
+void wavefront_compute_trim_ends(
     wavefront_aligner_t* const wf_aligner,
-    int score);
+    wavefront_t* const wavefront);
+void wavefront_compute_trim_ends_set(
+    wavefront_aligner_t* const wf_aligner,
+    wavefront_set_t* const wavefront_set);
 
 #endif /* WAVEFRONT_COMPUTE_H_ */

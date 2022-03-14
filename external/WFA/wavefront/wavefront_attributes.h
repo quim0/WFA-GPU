@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: WaveFront aligner data structure attributes
  */
@@ -34,15 +34,16 @@
 
 #include "utils/commons.h"
 #include "alignment/cigar.h"
-#include "gap_affine/affine_penalties.h"
-#include "gap_affine2p/affine2p_penalties.h"
-#include "gap_lineal/lineal_penalties.h"
+#include "alignment/affine_penalties.h"
+#include "alignment/affine2p_penalties.h"
+#include "alignment/linear_penalties.h"
+#include "system/profiler_timer.h"
 #include "system/mm_allocator.h"
 
 #include "wavefront_penalties.h"
-#include "wavefront_reduction.h"
 #include "wavefront_plot.h"
 #include "wavefront_display.h"
+#include "wavefront_heuristic.h"
 
 /*
  * Alignment scope
@@ -68,44 +69,83 @@ typedef struct {
 } alignment_form_t;
 
 /*
+ * Custom extend-match function, e.g.:
+ *
+ *   typedef struct {
+ *     char* pattern;
+ *     int pattern_length;
+ *     char* text;
+ *     int text_length;
+ *   } match_function_params_t;
+ *
+ *   int match_function(int v,int h,void* arguments) {
+ *     // Extract parameters
+ *     match_function_params_t* match_arguments = (match_function_params_t*)arguments;
+ *     // Check match
+ *     if (v > match_arguments->pattern_length || h > match_arguments->text_length) return 0;
+ *     return (match_arguments->pattern[v] == match_arguments->text[h]);
+ *   }
+ */
+typedef int (*alignment_match_funct_t)(int,int,void*);
+
+/*
  * Alignment system configuration
  */
 typedef struct {
-  // Global
-  int global_probe_interval;          // Score-ticks interval to check any limits
-  // BT-Buffer compacting
-  int bt_compact_probe_interval;      // Score-ticks interval to check BT-buffer compacting
-  uint64_t bt_compact_max_memory;     // Maximum BT-buffer memory (allowed before trying compacting)
-  uint64_t bt_compact_max_memory_eff; // Effective maximum BT-buffer memory
+  // Debug
+  bool check_alignment_correct;  // Verify that the alignment CIGAR output is correct
+  // Probing intervals
+  int probe_interval_global;     // Score-ticks interval to check any limits
+  int probe_interval_compact;    // Score-ticks interval to check BT-buffer compacting
   // Memory
-  uint64_t max_memory_used;           // Maximum memory allowed to used before quit
-  uint64_t max_memory_resident;       // Maximum memory allowed to be buffered before reap
-  // Misc
-  bool verbose;                       // Verbose (regulates messages during alignment)
+  uint64_t max_partial_compacts; // Maximum partial-compacts before attempting full-compact
+  uint64_t max_memory_compact;   // Maximum BT-buffer memory allowed before trigger compact
+  uint64_t max_memory_resident;  // Maximum memory allowed to be buffered before reap
+  uint64_t max_memory_abort;     // Maximum memory allowed to be used before aborting alignment
+  // Verbose
+  //  0 - Quiet
+  //  1 - Report WFA progress and heavy tasks
+  //  2 - Report each sequence aligned (brief)
+  //  3 - Report each sequence aligned (very verbose)
+  int verbose;                   // Verbose (regulates messages during alignment)
+  // Profile
+  profiler_timer_t timer;        // Time alignment
 } alignment_system_t;
+
+/*
+ * Low-memory modes
+ */
+typedef enum {
+  wavefront_memory_high = 0,     // High-memore mode (fastest, stores all WFs explicitly)
+  wavefront_memory_med = 1,      // Succing-memory mode (medium, offloads half-full BT-blocks)
+  wavefront_memory_low = 2,      // Succing-memory mode (slow, offloads only full BT-blocks)
+} wavefront_memory_t;
 
 /*
  * Wavefront Aligner Attributes
  */
 typedef struct {
   // Distance model
-  distance_metric_t distance_metric;         // Alignment metric/distance used
-  alignment_scope_t alignment_scope;         // Alignment scope (score only or full-CIGAR)
-  alignment_form_t alignment_form;           // Alignment mode (end-to-end/ends-free)
+  distance_metric_t distance_metric;       // Alignment metric/distance used
+  alignment_scope_t alignment_scope;       // Alignment scope (score only or full-CIGAR)
+  alignment_form_t alignment_form;         // Alignment mode (end-to-end/ends-free)
   // Penalties
-  lineal_penalties_t lineal_penalties;       // Gap-lineal penalties (placeholder)
-  affine_penalties_t affine_penalties;       // Gap-affine penalties (placeholder)
-  affine2p_penalties_t affine2p_penalties;   // Gap-affine-2p penalties (placeholder)
-  // Reduction strategy
-  wavefront_reduction_t reduction;           // Wavefront reduction
+  linear_penalties_t linear_penalties;     // Gap-linear penalties (placeholder)
+  affine_penalties_t affine_penalties;     // Gap-affine penalties (placeholder)
+  affine2p_penalties_t affine2p_penalties; // Gap-affine-2p penalties (placeholder)
+  // Heuristic strategy
+  wavefront_heuristic_t heuristic;         // Wavefront heuristic
   // Memory model
-  bool low_memory;                           // Use low-memory strategy (modular wavefronts and piggyback)
+  wavefront_memory_t memory_mode;          // Wavefront memory strategy (modular wavefronts and piggyback)
+  // Custom function to compare sequences
+  alignment_match_funct_t match_funct;     // Custom matching function (match(v,h,args))
+  void* match_funct_arguments;             // Generic arguments passed to matching function (args)
   // External MM (instead of allocating one inside)
-  mm_allocator_t* mm_allocator;              // MM-Allocator
+  mm_allocator_t* mm_allocator;            // MM-Allocator
   // Display
-  wavefront_plot_params_t plot_params;       // Wavefront plot
+  wavefront_plot_params_t plot_params;     // Wavefront plot
   // System
-  alignment_system_t system;                 // System related parameters
+  alignment_system_t system;               // System related parameters
 } wavefront_aligner_attr_t;
 
 /*

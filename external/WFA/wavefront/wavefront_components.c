@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,12 +24,14 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: WaveFront aligner components
  */
 
 #include "wavefront_components.h"
+#include "utils/bitmap.h"
+#include "system/profiler_timer.h"
 
 /*
  * Configuration
@@ -47,31 +49,31 @@ void wavefront_components_dimensions_edit(
     const int max_text_length,
     int* const max_score_scope,
     int* const num_wavefronts) {
+  // Compute max-scope
+  *max_score_scope = 2;
   // Dimensions
   if (wf_components->memory_modular) {
-    *max_score_scope = 2;
     *num_wavefronts = 2;
   } else {
-    *max_score_scope = -1;
     *num_wavefronts = MAX(max_pattern_length,max_text_length);
   }
 }
-void wavefront_components_dimensions_lineal(
+void wavefront_components_dimensions_linear(
     wavefront_components_t* const wf_components,
     wavefronts_penalties_t* const penalties,
     const int max_pattern_length,
     const int max_text_length,
     int* const max_score_scope,
     int* const num_wavefronts) {
+  // Compute max-scope
+  *max_score_scope = MAX(penalties->mismatch,penalties->gap_opening1) + 1;
   // Dimensions
   if (wf_components->memory_modular) {
-    *max_score_scope = MAX(penalties->mismatch,penalties->gap_opening1) + 1;
     *num_wavefronts = *max_score_scope;
   } else {
     const int abs_seq_diff = ABS(max_pattern_length-max_text_length);
     const int max_score_misms = MIN(max_pattern_length,max_text_length) * penalties->mismatch;
     const int max_score_indel = penalties->gap_opening1 * abs_seq_diff;
-    *max_score_scope = -1;
     *num_wavefronts = max_score_misms + max_score_indel;
   }
 }
@@ -82,16 +84,16 @@ void wavefront_components_dimensions_affine(
     const int max_text_length,
     int* const max_score_scope,
     int* const num_wavefronts) {
+  // Compute max-scope
+  const int max_score_scope_indel = penalties->gap_opening1+penalties->gap_extension1;
+  *max_score_scope = MAX(max_score_scope_indel,penalties->mismatch) + 1;
   // Dimensions
   if (wf_components->memory_modular) {
-    const int max_score_scope_indel = penalties->gap_opening1+penalties->gap_extension1;
-    *max_score_scope = MAX(max_score_scope_indel,penalties->mismatch) + 1;
     *num_wavefronts = *max_score_scope;
   } else {
     const int abs_seq_diff = ABS(max_pattern_length-max_text_length);
     const int max_score_misms = MIN(max_pattern_length,max_text_length) * penalties->mismatch;
     const int max_score_indel = penalties->gap_opening1 + abs_seq_diff * penalties->gap_extension1;
-    *max_score_scope = -1;
     *num_wavefronts = max_score_misms + max_score_indel;
   }
 }
@@ -102,12 +104,13 @@ void wavefront_components_dimensions_affine2p(
     const int max_text_length,
     int* const max_score_scope,
     int* const num_wavefronts) {
+  // Compute max-scope
+  const int max_score_scope_indel =
+      MAX(penalties->gap_opening1+penalties->gap_extension1,
+          penalties->gap_opening2+penalties->gap_extension2);
+  *max_score_scope = MAX(max_score_scope_indel,penalties->mismatch) + 1;
   // Dimensions
   if (wf_components->memory_modular) {
-    const int max_score_scope_indel =
-        MAX(penalties->gap_opening1+penalties->gap_extension1,
-            penalties->gap_opening2+penalties->gap_extension2);
-    *max_score_scope = MAX(max_score_scope_indel,penalties->mismatch) + 1;
     *num_wavefronts = *max_score_scope;
   } else {
     const int abs_seq_diff = ABS(max_pattern_length-max_text_length);
@@ -115,7 +118,6 @@ void wavefront_components_dimensions_affine2p(
     const int max_score_indel1 = penalties->gap_opening1 + abs_seq_diff * penalties->gap_extension1;
     const int max_score_indel2 = penalties->gap_opening2 + abs_seq_diff * penalties->gap_extension2;
     const int max_score_indel = MIN(max_score_indel1,max_score_indel2);
-    *max_score_scope = -1;
     *num_wavefronts = max_score_misms + max_score_indel;
   }
 }
@@ -126,15 +128,17 @@ void wavefront_components_dimensions(
     const int max_text_length,
     int* const max_score_scope,
     int* const num_wavefronts) {
+  // Switch attending to distance-metric
   switch (penalties->distance_metric) {
+    case indel:
     case edit:
       wavefront_components_dimensions_edit(
           wf_components,
           max_pattern_length,max_text_length,
           max_score_scope,num_wavefronts);
       break;
-    case gap_lineal:
-      wavefront_components_dimensions_lineal(
+    case gap_linear:
+      wavefront_components_dimensions_linear(
           wf_components,penalties,
           max_pattern_length,max_text_length,
           max_score_scope,num_wavefronts);
@@ -152,6 +156,9 @@ void wavefront_components_dimensions(
           max_score_scope,num_wavefronts);
       break;
   }
+  // Clear historic
+  wf_components->historic_max_hi = 0;
+  wf_components->historic_min_lo = 0;
 }
 /*
  * Setup
@@ -167,7 +174,7 @@ void wavefront_components_allocate_wf(
   mm_allocator_t* const mm_allocator = wf_components->mm_allocator;
   // Allocate wavefronts
   wf_components->mwavefronts = mm_allocator_calloc(mm_allocator,num_wavefronts,wavefront_t*,init_wf);
-  if (distance_metric==edit || distance_metric==gap_lineal) {
+  if (distance_metric <= gap_linear) {
     wf_components->i1wavefronts = NULL;
     wf_components->d1wavefronts = NULL;
     wf_components->i2wavefronts = NULL;
@@ -175,7 +182,7 @@ void wavefront_components_allocate_wf(
   } else {
     wf_components->i1wavefronts = mm_allocator_calloc(mm_allocator,num_wavefronts,wavefront_t*,init_wf);
     wf_components->d1wavefronts = mm_allocator_calloc(mm_allocator,num_wavefronts,wavefront_t*,init_wf);
-    if (distance_metric==gap_affine) {
+    if (distance_metric == gap_affine) {
       wf_components->i2wavefronts = NULL;
       wf_components->d2wavefronts = NULL;
     } else {
@@ -204,12 +211,12 @@ void wavefront_components_allocate(
       &wf_components->num_wavefronts);
   wavefront_components_allocate_wf(wf_components,
       max_pattern_length,max_text_length,penalties->distance_metric);
-  // Allocate victim wavefront
+  // Allocate victim wavefront (outside slab)
   wavefront_t* const wavefront_victim = mm_allocator_alloc(mm_allocator,wavefront_t);
   wavefront_allocate(wavefront_victim,WF_NULL_INIT_LENGTH,bt_piggyback,mm_allocator);
   wavefront_init_victim(wavefront_victim,WF_NULL_INIT_LO,WF_NULL_INIT_HI);
   wf_components->wavefront_victim = wavefront_victim;
-  // Allocate null wavefront
+  // Allocate null wavefront (outside slab)
   wavefront_t* const wavefront_null = mm_allocator_alloc(mm_allocator,wavefront_t);
   wavefront_allocate(wavefront_null,WF_NULL_INIT_LENGTH,bt_piggyback,mm_allocator);
   wavefront_init_null(wavefront_null,WF_NULL_INIT_LO,WF_NULL_INIT_HI);
@@ -234,6 +241,8 @@ void wavefront_components_clear(
     if (wf_components->i2wavefronts) memset(wf_components->i2wavefronts,0,wf_size);
     if (wf_components->d2wavefronts) memset(wf_components->d2wavefronts,0,wf_size);
   }
+  wf_components->historic_max_hi = 0;
+  wf_components->historic_min_lo = 0;
   // BT-Buffer
   if (wf_components->bt_buffer) wf_backtrace_buffer_clear(wf_components->bt_buffer);
 }
@@ -294,8 +303,8 @@ void wavefront_components_resize_null__victim(
     const int lo,
     const int hi) {
   // Resize null/victim wavefronts (if needed)
-  if (lo-1 < wf_components->wavefront_null->wf_elements_used_min ||
-      hi+1 > wf_components->wavefront_null->wf_elements_used_max) {
+  if (lo-1 < wf_components->wavefront_null->wf_elements_init_min ||
+      hi+1 > wf_components->wavefront_null->wf_elements_init_max) {
     // Parameters
     mm_allocator_t* const mm_allocator = wf_components->mm_allocator;
     // Expand and leave some leeway
@@ -315,89 +324,102 @@ void wavefront_components_resize_null__victim(
  */
 void wavefront_components_mark_backtrace(
     wf_backtrace_buffer_t* const bt_buffer,
+    bitmap_t* const bitmap,
     wavefront_t* const wavefront) {
   // Parameters
   wf_offset_t* const offsets = wavefront->offsets;
-  block_idx_t* const bt_prev = wavefront->bt_prev;
+  bt_block_idx_t* const bt_prev = wavefront->bt_prev;
   const int lo = wavefront->lo;
   const int hi = wavefront->hi;
-  // Mark all wavefront backtraces
-  int k;
-  for (k=lo;k<=hi;++k) {
-    if (offsets[k]>=0) wf_backtrace_buffer_mark_backtrace(bt_buffer,bt_prev[k]);
-  }
+  // Mark all wavefront backtraces (batch mode)
+  wf_backtrace_buffer_mark_backtrace_batch(
+      bt_buffer,offsets+lo,bt_prev+lo,hi-lo+1,bitmap);
+  //  int i;
+  //  for (i=lo;i<=hi;++i) {
+  //    if (offsets[i]>=0) wf_backtrace_buffer_mark_backtrace(bt_buffer,bt_prev[i],bitmap);
+  //  }
 }
 void wavefront_components_mark_wavefronts(
     wavefront_components_t* const wf_components,
+    bitmap_t* const bitmap,
     const int score) {
   // Parameters
   wf_backtrace_buffer_t* const bt_buffer = wf_components->bt_buffer;
+  const int max_score_scope = wf_components->max_score_scope;
   // Mark Active Working Set (AWS)
   int i;
-  for (i=0;i<wf_components->max_score_scope;++i) {
+  for (i=0;i<max_score_scope;++i) {
     // Compute score
     const int score_mod = (score-i) % wf_components->max_score_scope;
     // Mark M-wavefront
     wavefront_t* const mwavefront = wf_components->mwavefronts[score_mod];
-    if (mwavefront!=NULL) wavefront_components_mark_backtrace(bt_buffer,mwavefront);
+    if (mwavefront!=NULL) wavefront_components_mark_backtrace(bt_buffer,bitmap,mwavefront);
     // Mark (I1/D1)-wavefronts
     if (wf_components->i1wavefronts != NULL) {
       wavefront_t* const i1wavefront = wf_components->i1wavefronts[score_mod];
-      if (i1wavefront!=NULL) wavefront_components_mark_backtrace(bt_buffer,i1wavefront);
+      if (i1wavefront!=NULL) wavefront_components_mark_backtrace(bt_buffer,bitmap,i1wavefront);
       wavefront_t* const d1wavefront = wf_components->d1wavefronts[score_mod];
-      if (d1wavefront!=NULL) wavefront_components_mark_backtrace(bt_buffer,d1wavefront);
+      if (d1wavefront!=NULL) wavefront_components_mark_backtrace(bt_buffer,bitmap,d1wavefront);
       // Mark (I2/D2)-wavefronts
       if (wf_components->i2wavefronts != NULL) {
         wavefront_t* const i2wavefront = wf_components->i2wavefronts[score_mod];
-        if (i2wavefront!=NULL) wavefront_components_mark_backtrace(bt_buffer,i2wavefront);
+        if (i2wavefront!=NULL) wavefront_components_mark_backtrace(bt_buffer,bitmap,i2wavefront);
         wavefront_t* const d2wavefront = wf_components->d2wavefronts[score_mod];
-        if (d2wavefront!=NULL) wavefront_components_mark_backtrace(bt_buffer,d2wavefront);
+        if (d2wavefront!=NULL) wavefront_components_mark_backtrace(bt_buffer,bitmap,d2wavefront);
       }
     }
   }
+  // Update counters in marked bitmap
+  bitmap_update_counters(bitmap);
 }
 /*
  * Translate block-idxs
  */
 void wavefront_components_translate_idx(
-    wf_backtrace_buffer_t* const bt_buffer,
+    wavefront_components_t* const wf_components,
+    bitmap_t* const bitmap,
     wavefront_t* const wavefront) {
   // Parameters
   wf_offset_t* const offsets = wavefront->offsets;
-  block_idx_t* const bt_prev = wavefront->bt_prev;
+  bt_block_idx_t* const bt_prev = wavefront->bt_prev;
   const int lo = wavefront->lo;
   const int hi = wavefront->hi;
+  const bt_block_idx_t num_compacted_blocks = wf_components->bt_buffer->num_compacted_blocks;
   // Translate all wavefront block-idxs
   int k;
   for (k=lo;k<=hi;++k) {
-    if (offsets[k]>=0) bt_prev[k] = wf_backtrace_buffer_translate_idx(bt_buffer,bt_prev[k]);
+    if (offsets[k]>=0) {  // NOTE bt_prev[k] >= num_compacted_blocks
+      bt_prev[k] = (bt_prev[k]==BT_BLOCK_IDX_NULL) ?
+          BT_BLOCK_IDX_NULL :
+          num_compacted_blocks + bitmap_erank(bitmap,bt_prev[k]);
+    }
   }
 }
 void wavefront_components_translate_wavefronts(
     wavefront_components_t* const wf_components,
+    bitmap_t* const bitmap,
     const int score) {
-  // Parameters
-  wf_backtrace_buffer_t* const bt_buffer = wf_components->bt_buffer;
   // Mark Active Working Set (AWS)
+  const int max_score_scope = wf_components->max_score_scope;
   int i;
-  for (i=0;i<wf_components->max_score_scope;++i) {
+  for (i=0;i<max_score_scope;++i) {
     // Compute score
     const int score_mod = (score-i) % wf_components->max_score_scope;
     // Mark M-wavefront
     wavefront_t* const mwavefront = wf_components->mwavefronts[score_mod];
-    if (mwavefront!=NULL) wavefront_components_translate_idx(bt_buffer,mwavefront);
+    if (mwavefront!=NULL) wavefront_components_translate_idx(wf_components,bitmap,mwavefront);
     // Mark (I1/D1)-wavefronts
     if (wf_components->i1wavefronts != NULL) {
       wavefront_t* const i1wavefront = wf_components->i1wavefronts[score_mod];
-      if (i1wavefront!=NULL) wavefront_components_translate_idx(bt_buffer,i1wavefront);
+      if (i1wavefront!=NULL) wavefront_components_translate_idx(wf_components,bitmap,i1wavefront);
       wavefront_t* const d1wavefront = wf_components->d1wavefronts[score_mod];
-      if (d1wavefront!=NULL) wavefront_components_translate_idx(bt_buffer,d1wavefront);
+      if (d1wavefront!=NULL) wavefront_components_translate_idx(wf_components,bitmap,d1wavefront);
       // Mark (I2/D2)-wavefronts
       if (wf_components->i2wavefronts != NULL) {
         wavefront_t* const i2wavefront = wf_components->i2wavefronts[score_mod];
-        if (i2wavefront!=NULL) wavefront_components_translate_idx(bt_buffer,i2wavefront);
+        if (i2wavefront!=NULL) wavefront_components_translate_idx(wf_components,bitmap,i2wavefront);
         wavefront_t* const d2wavefront = wf_components->d2wavefronts[score_mod];
-        if (d2wavefront!=NULL) wavefront_components_translate_idx(bt_buffer,d2wavefront);
+        if (d2wavefront!=NULL) wavefront_components_translate_idx(wf_components,bitmap,d2wavefront);
       }
     }
   }
@@ -409,19 +431,31 @@ void wavefront_components_compact_bt_buffer(
     wavefront_components_t* const wf_components,
     const int score,
     const bool verbose) {
+  // PROFILE
+  profiler_timer_t timer;
+  if (verbose) { timer_reset(&timer); timer_start(&timer); }
   // Parameters
-  wf_backtrace_buffer_t* const bt_buffer_full = wf_components->bt_buffer;
+  wf_backtrace_buffer_t* const bt_buffer = wf_components->bt_buffer;
+  const uint64_t bt_buffer_used = wf_backtrace_buffer_get_used(bt_buffer);
+  // Allocate bitmap
+  bitmap_t* const bitmap = bitmap_new(bt_buffer_used,wf_components->mm_allocator);
   // Mark Active Working Set (AWS)
-  wavefront_components_mark_wavefronts(wf_components,score);
-  // Create new BT-Buffer
-  wf_backtrace_buffer_t* const bt_buffer_compacted =
-      wf_backtrace_buffer_new(wf_components->mm_allocator);
-  // Compact marked blocks (leave new idx on the old blocks)
-  wf_backtrace_buffer_compact_marked(bt_buffer_full,bt_buffer_compacted,verbose);
+  wavefront_components_mark_wavefronts(wf_components,bitmap,score);
+  // Compact marked blocks (also translates idxs to compacted positions)
+  const bt_block_idx_t total_compacted_blocks =
+      wf_backtrace_buffer_compact_marked(bt_buffer,bitmap,verbose);
   // Translate Active Working Set (AWS)
-  wavefront_components_translate_wavefronts(wf_components,score);
-  // Replace BT-Buffer
-  wf_components->bt_buffer = bt_buffer_compacted;
-  wf_backtrace_buffer_delete(bt_buffer_full);
+  wavefront_components_translate_wavefronts(wf_components,bitmap,score);
+  // Set new compacted blocks
+  wf_backtrace_buffer_set_num_compacted_blocks(bt_buffer,total_compacted_blocks);
+  // Free
+  bitmap_delete(bitmap);
+  // PROFILE
+  if (verbose) {
+    timer_stop(&timer);
+    fprintf(stderr,"[");
+    timer_print_total(stderr,&timer);
+    fprintf(stderr,"]\n");
+  }
 }
 

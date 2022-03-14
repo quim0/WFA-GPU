@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: Common functions/utilities and headers for C development
  */
@@ -67,7 +67,8 @@
 /*
  * Macro Utils (Stringify)
  */
-#define QUOTE(value) #value
+#define STRINGIFY_(a) #a
+#define STRINGIFY(a) STRINGIFY_(a)
 #define SWAP(a,b) do {__typeof__(a) aux = a; a = b; b = aux;} while (0)
 
 /*
@@ -84,7 +85,6 @@
 #define SLASH '/'
 #define STAR '*'
 #define DOT '.'
-#define EQUAL '='
 #define COMA ','
 #define SEMICOLON ';'
 #define COLON ':'
@@ -227,14 +227,6 @@ uint64_t rand_iid(const uint64_t min,const uint64_t max);
 #define GET_HEX_DIGIT(character) (IS_NUMBER(character) ? GET_DIGIT(character) : (toupper(character) - 'A' + 10))
 
 /*
- * Printing
- */
-#define PRINT_CHAR_REP(stream,character,times) { \
-  int i; \
-  for (i=0;i<times;++i) fprintf(stream,"%c",character); \
-}
-
-/*
  * Math
  */
 #define BOUNDED_SUBTRACTION(minuend,subtrahend,limit) (((minuend)>((limit)+(subtrahend))) ? (minuend)-(subtrahend):(limit))
@@ -248,6 +240,9 @@ uint64_t rand_iid(const uint64_t min,const uint64_t max);
 
 #define TELESCOPIC_FACTOR (3.0/2.0)
 
+uint32_t nominal_prop_u32(const uint32_t base,const double factor);
+uint64_t nominal_prop_u64(const uint64_t base,const double factor);
+
 /*
  * Vectorize
  */
@@ -258,5 +253,24 @@ uint64_t rand_iid(const uint64_t min,const uint64_t max);
 #else
   #define PRAGMA_LOOP_VECTORIZE _Pragma("ivdep")
 #endif
+
+/*
+ * Popcount macros
+ */
+#define POPCOUNT_64(word64) __builtin_popcountll((word64))
+#define POPCOUNT_32(word32) __builtin_popcount((word32))
+
+/*
+ * Prefetch macros
+ */
+#define PREFETCH(ADDR) __builtin_prefetch(((const char*)ADDR))
+
+/*
+ * Display
+ */
+#define PRINT_CHAR_REP(stream,character,times) { \
+  int i; \
+  for (i=0;i<times;++i) fprintf(stream,"%c",character); \
+}
 
 #endif /* COMMONS_H_ */

@@ -26,7 +26,19 @@
 extern "C" {
 #endif
 
+int compute_alignments_cpu_threaded (const int batch_size,
+                                      const int from,
+                                      alignment_result_t* results,
+                                      const sequence_pair_t* sequences_metadata,
+                                      const char* sequences_buffer,
+                                      const int x, const int o, const int e);
+
 int compute_alignment_cpu (const char* const pattern, const char* const text,
+                           const size_t plen, const size_t tlen,
+                           const int x, const int o, const int e);
+
+
+void pprint_cigar_cpu (const char* const pattern, const char* const text,
                            const size_t plen, const size_t tlen,
                            const int x, const int o, const int e);
 

@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: Edit cigar data-structure (match/mismatch/insertion/deletion)
  */
@@ -105,7 +105,7 @@ void cigar_add_mismatches(
         ++p;
         break;
       default:
-        fprintf(stderr,"Aband-gaba. Wrong edit operation\n");
+        fprintf(stderr,"[CIGAR] Wrong edit operation\n");
         exit(1);
         break;
     }
@@ -136,16 +136,16 @@ int cigar_score_edit(
   }
   return score;
 }
-int cigar_score_gap_lineal(
+int cigar_score_gap_linear(
     cigar_t* const cigar,
-    lineal_penalties_t* const penalties) {
+    linear_penalties_t* const penalties) {
   int score = 0, i;
   for (i=cigar->begin_offset;i<cigar->end_offset;++i) {
     switch (cigar->operations[i]) {
       case 'M': score -= penalties->match; break;
       case 'X': score -= penalties->mismatch; break;
-      case 'I': score -= penalties->insertion; break;
-      case 'D': score -= penalties->deletion; break;
+      case 'I': score -= penalties->indel; break;
+      case 'D': score -= penalties->indel; break;
       default: return INT_MIN;
     }
   }
@@ -171,7 +171,7 @@ int cigar_score_gap_affine(
         score -= penalties->gap_extension + ((last_op=='I') ? 0 : penalties->gap_opening);
         break;
       default:
-        fprintf(stderr,"Computing CIGAR score: Unknown operation\n");
+        fprintf(stderr,"[CIGAR] Computing CIGAR score: Unknown operation\n");
         exit(1);
     }
     last_op = cigar->operations[i];
@@ -194,7 +194,7 @@ int cigar_score_gap_affine2p_get_operations_score(
       return MIN(score1,score2);
     }
     default:
-      fprintf(stderr,"Computing CIGAR score: Unknown operation\n");
+      fprintf(stderr,"[CIGAR] Computing CIGAR score: Unknown operation\n");
       exit(1);
   }
 }
@@ -270,7 +270,7 @@ bool cigar_check_alignment(
         if (pattern[pattern_pos] != text[text_pos]) {
           if (verbose) {
             fprintf(stream,
-                "Align Check. Alignment not matching (pattern[%d]=%c != text[%d]=%c)\n",
+                "[AlignCheck] Alignment not matching (pattern[%d]=%c != text[%d]=%c)\n",
                 pattern_pos,pattern[pattern_pos],text_pos,text[text_pos]);
           }
           return false;
@@ -283,7 +283,7 @@ bool cigar_check_alignment(
         if (pattern[pattern_pos] == text[text_pos]) {
           if (verbose) {
             fprintf(stream,
-                "Align Check. Alignment not mismatching (pattern[%d]=%c == text[%d]=%c)\n",
+                "[AlignCheck] Alignment not mismatching (pattern[%d]=%c == text[%d]=%c)\n",
                 pattern_pos,pattern[pattern_pos],text_pos,text[text_pos]);
           }
           return false;
@@ -298,7 +298,7 @@ bool cigar_check_alignment(
         ++pattern_pos;
         break;
       default:
-        fprintf(stderr,"CIGAR check. Unknown edit operation '%c'\n",operations[i]);
+        fprintf(stderr,"[AlignCheck] Unknown edit operation '%c'\n",operations[i]);
         exit(1);
         break;
     }
@@ -307,7 +307,7 @@ bool cigar_check_alignment(
   if (pattern_pos != pattern_length) {
     if (verbose) {
       fprintf(stream,
-          "Align Check. Alignment incorrect length (pattern-aligned=%d,pattern-length=%d)\n",
+          "[AlignCheck] Alignment incorrect length (pattern-aligned=%d,pattern-length=%d)\n",
           pattern_pos,pattern_length);
     }
     return false;
@@ -315,7 +315,7 @@ bool cigar_check_alignment(
   if (text_pos != text_length) {
     if (verbose) {
       fprintf(stream,
-          "Align Check. Alignment incorrect length (text-aligned=%d,text-length=%d)\n",
+          "[AlignCheck] Alignment incorrect length (text-aligned=%d,text-length=%d)\n",
           text_pos,text_length);
     }
     return false;
@@ -350,6 +350,39 @@ void cigar_print(
   if (print_matches || last_op != 'M') {
     fprintf(stream,"%d%c",last_op_length,last_op);
   }
+}
+int cigar_sprint(
+    char* buffer,
+    cigar_t* const cigar,
+    const bool print_matches) {
+  // Parameters
+  int pos = 0;
+  // Check null CIGAR
+  if (cigar->begin_offset >= cigar->end_offset) {
+    buffer[pos] = '\0';
+    return pos;
+  }
+  // Print operations
+  char last_op = cigar->operations[cigar->begin_offset];
+  int last_op_length = 1;
+  int i;
+  for (i=cigar->begin_offset+1;i<cigar->end_offset;++i) {
+    if (cigar->operations[i]==last_op) {
+      ++last_op_length;
+    } else {
+      if (print_matches || last_op != 'M') {
+        pos += sprintf(buffer+pos,"%d%c",last_op_length,last_op);
+      }
+      last_op = cigar->operations[i];
+      last_op_length = 1;
+    }
+  }
+  if (print_matches || last_op != 'M') {
+    pos += sprintf(buffer+pos,"%d%c",last_op_length,last_op);
+  }
+  // Return
+  buffer[pos] = '\0';
+  return pos;
 }
 void cigar_print_pretty(
     FILE* const stream,

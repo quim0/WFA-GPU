@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: WaveFront Slab for fast pre-allocated wavefronts' memory handling
  */
@@ -82,8 +82,8 @@ void wavefront_slab_delete(
  */
 wavefront_t* wavefront_slab_allocate(
     wavefront_slab_t* const wavefront_slab,
-    const int lo,
-    const int hi);
+    const int min_lo,
+    const int max_hi);
 void wavefront_slab_free(
     wavefront_slab_t* const wavefront_slab,
     wavefront_t* const wavefront);

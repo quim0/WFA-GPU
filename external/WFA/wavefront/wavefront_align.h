@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: WaveFront alignment module for sequence pairwise alignment
  */
@@ -35,10 +35,6 @@
 #include "wavefront_aligner.h"
 #include "wavefront_display.h" // For convenience
 
-#define WF_ALIGN_SUCCESSFUL   0
-#define WF_ALIGN_MAX_SCORE   -1
-#define WF_ALIGN_OOM         -2
-
 /*
  * Wavefront Alignment
  */
@@ -48,5 +44,7 @@ int wavefront_align(
     const int pattern_length,
     const char* const text,
     const int text_length);
+int wavefront_align_resume(
+    wavefront_aligner_t* const wf_aligner);
 
 #endif /* WAVEFRONT_ALIGN_H_ */

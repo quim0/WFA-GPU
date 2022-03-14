@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: Common functions/utilities and headers for C development
  */
@@ -46,5 +46,26 @@ uint64_t rand_iid(
     return min + n_rand/sample;
   } else {
     return rand_iid(min,max);
+  }
+}
+/*
+ * Math
+ */
+uint32_t nominal_prop_u32(
+    const uint32_t base,
+    const double factor) {
+  if (0.0 <= factor || factor <= 1.0) {
+    return (uint32_t)((double)base*factor);
+  } else {
+    return (uint32_t)factor;
+  }
+}
+uint64_t nominal_prop_u64(
+    const uint64_t base,
+    const double factor) {
+  if (0.0 <= factor || factor <= 1.0) {
+    return (uint64_t)((double)base*factor);
+  } else {
+    return (uint64_t)factor;
   }
 }

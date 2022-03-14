@@ -22,6 +22,8 @@
 #ifndef SEQUENCES_H
 #define SEQUENCES_H
 
+#include <stddef.h>
+
 typedef struct {
     size_t text_offset;
     size_t pattern_offset;

@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: WaveFront-Alignment module for plot
  */
@@ -80,16 +80,9 @@ void wavefront_plot_free(
  */
 void wavefront_plot(
     wavefront_aligner_t* const wf_aligner,
-    char* const pattern,
-    char* const text,
+    const char* const pattern,
+    const char* const text,
     const int score);
-void wavefront_plot_reduction(
-    wavefront_aligner_t* const wf_aligner,
-    const int score,
-    const int lo_base,
-    const int lo_reduced,
-    const int hi_base,
-    const int hi_reduced);
 
 /*
  * Display

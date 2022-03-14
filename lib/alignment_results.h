@@ -23,6 +23,7 @@
 #define ALIGNMENT_RESULTS_H
 
 #include "wfa_types.h"
+#include <stdbool.h>
 
 typedef struct {
     bool finished;

@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: WaveFront alignment module for computing wavefronts (gap-affine)
  */
@@ -33,6 +33,20 @@
 #define WAVEFRONT_COMPUTE_AFFINE_H_
 
 #include "wavefront_aligner.h"
+
+/*
+ * Compute Kernels
+ */
+void wavefront_compute_affine_idm(
+    wavefront_aligner_t* const wf_aligner,
+    const wavefront_set_t* const wavefront_set,
+    const int lo,
+    const int hi);
+void wavefront_compute_affine_idm_piggyback(
+    wavefront_aligner_t* const wf_aligner,
+    const wavefront_set_t* const wavefront_set,
+    const int lo,
+    const int hi);
 
 /*
  * Compute wavefront (gap-affine)

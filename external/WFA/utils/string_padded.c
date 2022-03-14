@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: Padded string module to avoid handling corner conditions
  */
@@ -74,12 +74,12 @@ strings_padded_t* strings_padded_new(
   // Add padding
   strings_padded_add_padding(
       pattern,pattern_length,
-      pattern_begin_padding_length,pattern_end_padding_length,'X',
+      pattern_begin_padding_length,pattern_end_padding_length,'?',
       &(strings_padded->pattern_padded_buffer),
       &(strings_padded->pattern_padded),mm_allocator);
   strings_padded_add_padding(
       text,text_length,
-      text_begin_padding_length,text_end_padding_length,'Y',
+      text_begin_padding_length,text_end_padding_length,'!',
       &(strings_padded->text_padded_buffer),
       &(strings_padded->text_padded),mm_allocator);
   // Return
@@ -104,12 +104,12 @@ strings_padded_t* strings_padded_new_rhomb(
   // Add padding
   strings_padded_add_padding(
       pattern,pattern_length,
-      pattern_begin_padding_length,pattern_end_padding_length,'X',
+      pattern_begin_padding_length,pattern_end_padding_length,'?',
       &(strings_padded->pattern_padded_buffer),
       &(strings_padded->pattern_padded),mm_allocator);
   strings_padded_add_padding(
       text,text_length,
-      text_begin_padding_length,text_end_padding_length,'Y',
+      text_begin_padding_length,text_end_padding_length,'!',
       &(strings_padded->text_padded_buffer),
       &(strings_padded->text_padded),mm_allocator);
   // Set lengths

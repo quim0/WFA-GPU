@@ -1,10 +1,10 @@
 /*
  *                             The MIT License
  *
- * Wavefront Alignments Algorithms
+ * Wavefront Alignment Algorithms
  * Copyright (c) 2017 by Santiago Marco-Sola  <santiagomsola@gmail.com>
  *
- * This file is part of Wavefront Alignments Algorithms.
+ * This file is part of Wavefront Alignment Algorithms.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  *
- * PROJECT: Wavefront Alignments Algorithms
+ * PROJECT: Wavefront Alignment Algorithms
  * AUTHOR(S): Santiago Marco-Sola <santiagomsola@gmail.com>
  * DESCRIPTION: WaveFront aligner data structure attributes
  */
@@ -36,8 +36,8 @@
  */
 wavefront_aligner_attr_t wavefront_aligner_attr_default = {
     // Distance model & Penalties
-    .distance_metric = gap_affine, // TODO: DU wants lineal
-    .alignment_scope = compute_alignment, // TODO: I don't know what DU wants, honestly
+    .distance_metric = gap_affine,
+    .alignment_scope = compute_alignment,
     .alignment_form = {
         .span = alignment_end2end,
         .pattern_begin_free = 0,
@@ -46,18 +46,20 @@ wavefront_aligner_attr_t wavefront_aligner_attr_default = {
         .text_end_free = 0,
         .max_alignment_score = INT_MAX, // Unlimited
     },
+    // Custom matching functions
+    .match_funct = NULL,           // Use default match-compare function
+    .match_funct_arguments = NULL, // No arguments
     // Penalties
-    .lineal_penalties = {
+    .linear_penalties = {
         .match = 0,
         .mismatch = 4,
-        .insertion = 2,
-        .deletion  = 2,
+        .indel = 2,
     },
     .affine_penalties = {
         .match = 0,
         .mismatch = 4,
         .gap_opening = 6,
-        .gap_extension = 2, // 1
+        .gap_extension = 2,
     },
     .affine2p_penalties = {
         .match = 0,
@@ -67,14 +69,14 @@ wavefront_aligner_attr_t wavefront_aligner_attr_default = {
         .gap_opening2 = 24,
         .gap_extension2 = 1,
     },
-    // Reduction
-    .reduction = {
-        .reduction_strategy = wavefront_reduction_adaptive,
+    // Heuristic
+    .heuristic = {
+        .strategy = wf_heuristic_wfadaptive,
         .min_wavefront_length = 10,
         .max_distance_threshold = 50,
     },
     // Memory model
-    .low_memory = false,
+    .memory_mode = wavefront_memory_high,
     // MM
     .mm_allocator = NULL, // Use private MM
     // Display
@@ -88,11 +90,12 @@ wavefront_aligner_attr_t wavefront_aligner_attr_default = {
     },
     // System
     .system = {
-        .global_probe_interval = 2000,
-        .bt_compact_probe_interval = 6000,
-        .bt_compact_max_memory = BUFFER_SIZE_256M,
-        .max_memory_used = UINT64_MAX, // Unlimited
-        .max_memory_resident = BUFFER_SIZE_256M,
-        .verbose = false,
+        .check_alignment_correct = false,
+        .probe_interval_global = 2000,
+        .probe_interval_compact = 6000,
+        .max_memory_compact = -1,  // Automatically set based on memory-mode
+        .max_memory_resident = -1, // Automatically set based on memory-mode
+        .max_memory_abort = UINT64_MAX, // Unlimited
+        .verbose = 0, // Quiet
     },
 };

@@ -4,351 +4,527 @@
 
 ### 1.1 What is WFA?
 
-The wavefront alignment (WFA) algorithm is an exact gap-affine algorithm that takes advantage of  
-homologous regions between the sequences to accelerate the alignment process. As opposed to 
-traditional dynamic programming algorithms that run in quadratic time, the WFA runs in time O(ns),
-proportional to the read length n and the alignment score s, using O(s^2) memory. Moreover, the WFA
-exhibits simple data dependencies that can be easily vectorized, even by the automatic features of 
-modern compilers, for different architectures, without the need to adapt the code.
+The wavefront alignment (WFA) algorithm is an **exact** gap-affine algorithm that takes advantage of homologous regions between the sequences to accelerate the alignment process. Unlike to traditional dynamic programming algorithms that run in quadratic time, the WFA runs in time `O(ns+s^2)`, proportional to the sequence length `n` and the alignment score `s`, using `O(s^2)` memory. Moreover, the WFA algorithm exhibits simple computational patterns that the modern compilers can automatically vectorize for different architectures without adapting the code. To intuitively illustrate why the WFA algorithm is so interesting, look at the following figure. The left panel shows the cells computed by a classical dynamic programming based algorithm (like Smith-Waterman or Needleman Wunsch). In contrast, the right panel shows the cells computed by the WFA algorithm to obtain the same result (i.e., the optimal alignment).
 
-This library implements the WFA and the WFA-Adapt algorithms for gap-affine penalties. It also 
-provides support functions to display and verify the results. Moreover, it implements a benchmarking
-tool that serves to evaluate the performance of these two algorithms, together with other 
-high-performance alignment methods (checkout branch `benchmark`). The library can be executed   
-through the benchmarking tool for evaluation purposes or can be integrated into your code by calling
-the WFA functions.
+<p align = "center">
+<img src = "img/wfa.vs.swg.png" width="750px">
+</p>
 
-If you are interested in benchmarking WFA with other algorithms implemented or integrated into the
-WFA library, checkout branch `benchmark`.
+### 1.2 What is WFA2-lib?
 
-### 1.2 Getting started
+The WFA2 library implements the WFA algorithm for different distance metrics and alignment modes. It supports various [distance functions](#wfa2.distances): indel, edit, gap-lineal, gap-affine, and dual-gap gap-affine distances. The library allows computing only the score or the complete alignment (i.e., CIGAR) (see [Alignment Scope](#wfa2.scope)). Also, the WFA2 library supports computing end-to-end alignments (a.k.a. global-alignment) and ends-free alignments (including semi-global, glocal, and extension alignment) (see [Alignment Span](#wfa2.span)). In the case of long and noisy alignments, the library provides different [low-memory modes](#wfa2.mem) that significantly reduce the memory usage of the naive WFA algorithm implementation. Beyond the exact-alignment modes, the WFA2 library implements [heuristic modes](#wfa2.heuristics) that dramatically accelerate the alignment computation. Additionally, the library provides many other support functions to display and verify alignment results, control the overall memory usage, and more.
 
-Note: We recomend using the GCC compiler
+### 1.3 Getting started
 
-Clone GIT and compile
+Git clone and compile the library, tools, and examples.
 
 ```
-$> git clone https://github.com/smarco/WFA.git WFA
-$> cd WFA
+$> git clone https://github.com/smarco/WFA2-lib
+$> cd WFA2-lib
 $> make clean all
 ```
 
-## 3. PROGRAMMING WITH WFA
+### 1.4 Contents (where to go from here)
 
-Inside the folder `tools/examples/` the user can find two simples examples of how to program using 
-the WFA library. These examples aim to illustrate how to integrate the WFA code into any tool.
+Section [WFA2-lib features](#wfa2.features) explores the most relevant options and features of the library. Then, the folder [tools/](tools/README.md) contains tools that can be used to execute and understand the WFA2 library capabilities. Additionally, the folder [examples/](examples/README.md) contains simple examples illustrating how to integrate the WFA2 code into any tool.
 
-### 3.1 Simple WFA example
+* [Using WFA2-lib in your project](#wfa2.programming)
+    * [Simple C example](#wfa2.programming.c)
+    * [Simple C++ example](#wfa2.programming.cpp)
+* [WFA2-lib Features](#wfa2.features)
+    * [Distance Metrics](#wfa2.distances)
+    * [Alignment Scope](#wfa2.scope)
+    * [Alignment Span](#wfa2.span)
+    * [Memory modes](#wfa2.mem)
+    * [Heuristic modes](#wfa2.heuristics)
+    <!-- * [Other features](#wfa2.other) -->
+* [Reporting Bugs and Feature Request](#wfa2.complains)
+* [License](#wfa2.licence)
+* [Citation](#wfa2.cite) 
 
-This simple example illustrates how to align two sequences using the gap-affine WFA algorithm.
-First, we need to include the WFA alignment module.
+### 1.5 Important notes and clarifications
 
-```C
-#include "gap_affine/affine_wavefront_align.h"
-```
+- The WFA algorithm is an **exact algorithm**. If no heuristic is applied (e.g., band or adaptive pruning), the core algorithm guarantees to always find the optimal solution (i.e., best alignment score). Since its first release, some authors have referenced the WFA as approximated or heuristic, which is NOT the case.
 
-Then, we prepare the text, pattern, penalties, and the memory-managed (MM) allocator. Note that the
-`affine_penalties` is configured in terms of penalties. For that reason, mismatch, gap-opening, and
-gap-extension are supposed to be positive values.  
 
-```C
-  // Patter & Text
-  char* pattern = "TCTTTACTCGCGCGTTGGAGAAATACAATAGT";
-  char* text    = "TCTATACTGCGCGTTTGGAGAAATAAAATAGT";
-  // Allocate MM
-  mm_allocator_t* const mm_allocator = mm_allocator_new(BUFFER_SIZE_8M);
-  // Set penalties
-  affine_penalties_t affine_penalties = {
-      .match = 0,
-      .mismatch = 4,
-      .gap_opening = 6,
-      .gap_extension = 2,
-  };
-```
+- Given two sequences of length `n`, traditional dynamic-programming (DP) based methods (like Smith-Waterman or Needleman-Wunsch) compute the optimal alignment in `O(n^2)` time, using `O(n^2)` memory. In contrast, the WFA algorithm requires `O(ns+s^2)` time and `O(s^2)` memory (being `s` the optimal alignment score). Therefore, **the memory consumption of the WFA algorithm is not intrinsically higher than that of other methods**. Most DP-based methods can use heuristics (like banded, X-drop, or Z-drop) to reduce the execution time and the memory usage at the expense of losing accuracy. Likewise, **the WFA algorithm can also use heuristics to reduce the execution time and memory usage**.
 
-Afterwards, we initialize the `affine_wavefronts` object and we align the pattern against the text
-using the configured penalties.
+
+- **A note for the fierce competitors.** I can understand that science and publishing have become a fierce competition these days. Many researchers want their methods to be successful and popular, seeking funding, tenure, or even fame. If you are going to benchmark the WFA using the least favourable configuration, careless programming, and a disadvantageous setup, please, go ahead. But remember, researchers like you have put a lot of effort into developing the WFA. We all joined this "competition" because we sought to find better methods that could truly help other researchers. So, try to be nice, tone down the marketing, and produce fair evaluations and honest publications.
+
+## <a name="wfa2.programming"></a> 2. USING WFA2-LIB IN YOUR PROJECT
+
+### <a name="wfa2.programming.c"></a> 2.1 Simple C example
+
+This simple example illustrates how to align two sequences using the WFA2 library. First, include the WFA2 alignment headers.
 
 ```C
-  // Init Affine-WFA
-  affine_wavefronts_t* affine_wavefronts = affine_wavefronts_new_complete(
-      strlen(pattern),strlen(text),&affine_penalties,NULL,mm_allocator);
-  // Align
-  affine_wavefronts_align(
-      affine_wavefronts,pattern,strlen(pattern),text,strlen(text));
+#include "wavefront/wavefront_align.h"
 ```
 
-Finally, we can display the results of the alignment process. For example, the alignment score and
-the alignment CIGAR. For this purpose, the function `edit_cigar_score_gap_affine` computes the 
-CIGAR score, and the function `edit_cigar_print_pretty` prints pretty the CIGAR.
+Next, create and configure the WFA alignment object. The following example uses the defaults configuration and sets custom `gap_affine` penalties. Note that mismatch, gap-opening, and gap-extension must be positive values.  
 
 ```C
-  // Display alignment
-  const int score = edit_cigar_score_gap_affine(
-      &affine_wavefronts->edit_cigar,&affine_penalties);
-  fprintf(stderr,"  PATTERN  %s\n",pattern);
-  fprintf(stderr,"  TEXT     %s\n",text);
-  fprintf(stderr,"  SCORE COMPUTED %d\t",score);
-  edit_cigar_print_pretty(stderr,
-      pattern,strlen(pattern),text,strlen(text),
-      &affine_wavefronts->edit_cigar,mm_allocator);
-  // Free
-  affine_wavefronts_delete(affine_wavefronts);
-  mm_allocator_delete(mm_allocator);
+// Configure alignment attributes
+wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+attributes.distance_metric = gap_affine;
+attributes.affine_penalties.mismatch = 4;
+attributes.affine_penalties.gap_opening = 6;
+attributes.affine_penalties.gap_extension = 2;
+// Initialize Wavefront Aligner
+wavefront_aligner_t* const wf_aligner = wavefront_aligner_new(&attributes);
 ```
 
-Compile and run:
-
-```
-$> gcc -O3 -I../.. -L../../build wfa_basic.c -o wfa_basic -lwfa
-$> ./wfa_basic
-```
-
-### 3.2 WFA-Adaptive example
-
-This example shows how to use the adaptive version of the WFA (i.e., WFA-Adaptive) to further improve
-the performance of the WFA algorithm by discarding alignment paths that are unlikely to reach the 
-optimal solution. This example is very similar to the previous one, we only have to include the 
-parameters `minimum-wavefront-length` and `maximum-difference-distance`. 
- 
- 
-```C
-  const int min_wavefront_length = 10;
-  const int max_distance_threshold = 50;
-  // Init Affine-WFA
-  affine_wavefronts_t* affine_wavefronts = affine_wavefronts_new_reduced(
-      strlen(pattern),strlen(text),&affine_penalties,
-      min_wavefront_length,max_distance_threshold,NULL,mm_allocator);
-  // Align
-  affine_wavefronts_align(
-      affine_wavefronts,pattern,strlen(pattern),text,strlen(text));
-
-```
-
-In this example, we show how to access the individual elements of the CIGAR 
-(i.e., 'M','X','I', and 'D') encoded using plain 8-bit ASCII.
-
+Finally, call the `wavefront_align` function.
 
 ```C
-  // Count mismatches, deletions, and insertions
-  int i, misms=0, ins=0, del=0;
-  edit_cigar_t* const edit_cigar = &affine_wavefronts->edit_cigar;
-  for (i=edit_cigar->begin_offset;i<edit_cigar->end_offset;++i) {
-    switch (edit_cigar->operations[i]) {
-      case 'M': break;
-      case 'X': ++misms; break;
-      case 'D': ++del; break;
-      case 'I': ++ins; break;
-    }
-  }
-  fprintf(stderr,
-      "Alignment contains %d mismatches, %d insertions, "
-      "and %d deletions\n",misms,ins,del);
+char* pattern = "TCTTTACTCGCGCGTTGGAGAAATACAATAGT";
+char* text    = "TCTATACTGCGCGTTTGGAGAAATAAAATAGT";
+wavefront_align(wf_aligner,pattern,strlen(pattern),text,strlen(text)); // Align
 ```
 
-Compile and run:
+Afterwards, we can use the library to display the alignment result (e.g., the alignment score and CIGAR).
 
-```
-$> gcc -O3 -I../.. wfa_adapt.c ../../build/libwfa.a -o wfa_adapt
-$> ./wfa_basic
-```
-
-### 3.3 Aligning sequences longer than 65.536 bases
-
-By default, the WFA uses 16-bit integers to represent the alignment wavefronts. For that reason,
-the maximum sequence length allowed is 2^16. In case you want to align longer sequences, you
-must adjust the definitions on `gap_affine/affine_wavefront.h` and select `AFFINE_WAVEFRONT_W32`.
-
-```
-/*
- * Offset size
- */
-//#define AFFINE_WAVEFRONT_W8
-//#define AFFINE_WAVEFRONT_W16
-#define AFFINE_WAVEFRONT_W32
+```C
+// Display CIGAR & score
+cigar_print_pretty(stderr,pattern,strlen(pattern),text,strlen(text),
+                   &wf_aligner->cigar,wf_aligner->mm_allocator);
+fprintf(stderr,"Alignment Score %d\n",wf_aligner->cigar.score);
 ```
 
-## 4. BENCHMARKING. COMMAND-LINE AND OPTIONS
+At the end of the program, it is polite to release the memory used.
 
-### 4.1 Introduction to benchmarking WFA. Simple tests
-
-The WFA includes the benchmarking tool *align-benchmark* to test and compare the performance of 
-several pairwise alignment implementations, including the WFA and WFA-Adapt. This tool takes as 
-input a dataset containing pairs of sequences (i.e., pattern and text) to align. Patterns are 
-preceded by the '>' symbol and texts by the '<' symbol. Example:
-
-```
->ATTGGAAAATAGGATTGGGGTTTGTTTATATTTGGGTTGAGGGATGTCCCACCTTCGTCGTCCTTACGTTTCCGGAAGGGAGTGGTTAGCTCGAAGCCCA
-<GATTGGAAAATAGGATGGGGTTTGTTTATATTTGGGTTGAGGGATGTCCCACCTTGTCGTCCTTACGTTTCCGGAAGGGAGTGGTTGCTCGAAGCCCA
->CCGTAGAGTTAGACACTCGACCGTGGTGAATCCGCGACCACCGCTTTGACGGGCGCTCTACGGTATCCCGCGATTTGTGTACGTGAAGCAGTGATTAAAC
-<CCTAGAGTTAGACACTCGACCGTGGTGAATCCGCGATCTACCGCTTTGACGGGCGCTCTACGGTATCCCGCGATTTGTGTACGTGAAGCGAGTGATTAAAC
-[...]
+```C
+wavefront_aligner_delete(wf_aligner); // Free
 ```
 
-You can either generate a custom dataset of your own, or use the *generate-dataset* tool to generate
-a random dataset. For example, the following command generates a dataset named 'sample.dataset.seq' 
-of 5M pairs of 100 bases with an alignment error of 5% (i.e., 5 mismatches, insertions or deletions 
-per alignment).
+To compile and run this example, you need to link against the WFA library (-lwfa).
 
 ```
-$> ./bin/generate_dataset -n 5000000 -l 100 -e 0.05 -o sample.dataset.seq
+$> gcc -O3 wfa_example.c -o wfa_example -lwfa
+$> ./wfa_example
 ```
 
-Once you have the dataset ready, you can run the *align-benchmark* tool to benchmark the performance 
-of a specific pairwise alignment method. For example, the WFA algorithm:
+**IMPORTANT.** Once an alignment object is created, **it is strongly recommended to reuse it to compute multiple alignments**. Creating and destroying the alignment object for every alignment computed can have a significant overhead. Reusing the alignment object allows repurposing internal data structures, minimising the cost of memory allocations, and avoiding multiple alignment setups and precomputations.
 
-```
-$> ./bin/align_benchmark -i sample.dataset.seq -a gap-affine-wfa
-...processed 10000 reads (benchmark=125804.398 reads/s;alignment=188049.469 reads/s)
-...processed 20000 reads (benchmark=117722.406 reads/s;alignment=180925.031 reads/s)
-[...]
-...processed 5000000 reads (benchmark=113844.039 reads/s;alignment=177325.281 reads/s)
-[Benchmark]
-=> Total.reads            5000000
-=> Time.Benchmark        43.92 s  (    1   call,  43.92  s/call {min43.92s,Max43.92s})
-  => Time.Alignment      28.20 s  ( 64.20 %) (    5 Mcalls,   5.64 us/call {min438ns,Max47.05ms})
+### <a name="wfa2.programming.cpp"></a> 2.2 Simple C++ example
+
+The WFA2 library can be used from C++ code using the C++ bindings. This example is similar to the previous one but uses C++ bindings. First, include the C++ bindings and remember to use the WFA namespace.
+
+```C
+#include "bindings/cpp/WFAligner.hpp"
+using namespace wfa;
 ```
 
-The *align-benchmark* tool will finish and report overall benchmark time (including reading the 
-input, setup, checking, etc.) and the time taken by the algorithm (i.e., *Time.Alignment*). If you 
-want to measure the accuracy of the alignment method, you can add the option `--check` and all the
-alignments will be verified. 
+Configure and create the WFA alignment object. In this case, gap-affine distance using custom penalties and the standard memory-usage algorithm (i.e., standard WFA algorithm).
 
-```
-$> ./bin/align_benchmark -i sample.dataset.seq -a gap-affine-wfa --check
-...processed 10000 reads (benchmark=14596.232 reads/s;alignment=201373.984 reads/s)
-...processed 20000 reads (benchmark=13807.268 reads/s;alignment=194224.922 reads/s)
-[...]
-...processed 5000000 reads (benchmark=10625.568 reads/s;alignment=131371.703 reads/s)
-[Benchmark]
-=> Total.reads            5000000
-=> Time.Benchmark         7.84 m  (    1   call, 470.56  s/call {min470.56s,Max470.56s})
-  => Time.Alignment      28.06 s  (  5.9 %) (    5 Mcalls,   5.61 us/call {min424ns,Max73.61ms})
-[Accuracy]
- => Alignments.Correct        5.00 Malg        (100.00 %) (samples=5M{mean1.00,min1.00,Max1.00,Var0.00,StdDev0.00)}
- => Score.Correct             5.00 Malg        (100.00 %) (samples=5M{mean1.00,min1.00,Max1.00,Var0.00,StdDev0.00)}
-   => Score.Total           147.01 Mscore uds.            (samples=5M{mean29.40,min0.00,Max40.00,Var37.00,StdDev6.00)}
-     => Score.Diff            0.00 score uds.  (  0.00 %) (samples=0,--n/a--)}
- => CIGAR.Correct             0.00 alg         (  0.00 %) (samples=0,--n/a--)}
-   => CIGAR.Matches         484.76 Mbases      ( 96.95 %) (samples=484M{mean1.00,min1.00,Max1.00,Var0.00,StdDev0.00)}
-   => CIGAR.Mismatches        7.77 Mbases      (  1.55 %) (samples=7M{mean1.00,min1.00,Max1.00,Var0.00,StdDev0.00)}
-   => CIGAR.Insertions        7.47 Mbases      (  1.49 %) (samples=7M{mean1.00,min1.00,Max1.00,Var0.00,StdDev0.00)}
-   => CIGAR.Deletions         7.47 Mbases      (  1.49 %) (samples=7M{mean1.00,min1.00,Max1.00,Var0.00,StdDev0.00)}
-
+```C++
+// Create a WFAligner
+WFAlignerGapAffine aligner(4,6,2,WFAligner::Alignment,WFAligner::MemoryHigh);
 ```
 
-Using the `--check` option, the tool will report *Alignments.Correct* (i.e., total alignments that 
-are correct, not necessarily optimal), and *Score.Correct* (i.e., total alignments that have the 
-optimal score). Note that the overall benchmark time will increase due to the overhead introduced  
-by the checking routine, however the *Time.Alignment* should remain the same.
+Align two sequences (in this case, given as strings).
 
-### 4.2 Generate-dataset tool (Command-line and Options)
-
-```
-        --output|o        <File>
-          Filename/Path to the output dataset.
-          
-        --num-patterns|n  <Integer>
-          Total number of pairs pattern-text to generate.
-          
-        --length|l        <Integer>
-          Total length of the pattern.
-          
-        --error|e         <Float>
-          Total error-rate between the pattern and the text (allowing single-base mismatches, 
-          insertions and deletions). This parameter may modify the final length of the text.
-          
-        --help|h
-          Outputs a succinct manual for the tool.
+```C++
+string pattern = "TCTTTACTCGCGCGTTGGAGAAATACAATAGT";
+string text    = "TCTATACTGCGCGTTTGGAGAAATAAAATAGT";
+aligner.alignEnd2End(pattern,text); // Align
 ```
 
-### 4.3 Align-benchmark tool (Command-line and Options)
+Display the result of the alignment.
 
-Summary of algorithms/methods implemented within the benchmarking tool. If you are interested 
-in benchmarking WFA with other algorithms implemented or integrated into the WFA library, 
-checkout branch `benchmark`.
-
-|      Algorithm Name        |       Code-name       | Distance Model |  Output   | Implementation | Extra Parameters                                           |
-|----------------------------|:---------------------:|:--------------:|:---------:|----------------|------------------------------------------------------------|
-|DP Edit                     |edit-dp                |  Edit-distace  | Alignment |WFA             |                                                            |
-|DP Edit Banded              |edit-dp-banded         |  Edit-distace  | Alignment |WFA             | --bandwidth                                                |
-|DP Gap-lineal               |gap-lineal-nw          |   Gap-lineal   | Alignment |WFA             |                                                            |
-|DP Gap-affine               |gap-affine-swg         |   Gap-affine   | Alignment |WFA             |                                                            |
-|DP Gap-affine Banded        |gap-affine-swg-banded  |   Gap-affine   | Alignment |WFA             | --bandwidth                                                |
-|WFA Gap-affine              |gap-affine-wfa         |   Gap-affine   | Alignment |WFA             |                                                            |
-|WFA Gap-affine Adaptive     |gap-affine-wfa-adaptive|   Gap-affine   | Alignment |WFA             | --minimum-wavefront-length / --maximum-difference-distance |
-
-#### - Input
-
-```
-          --algorithm|a <algorithm-code-name> 
-            Selects pair-wise alignment algorithm/implementation.
-                                                       
-          --input|i <File>
-            Filename/path to the input SEQ file. That is, file containing the sequence pairs to
-            align. Sequences are stored one per line, grouped by pairs where the pattern is 
-            preceded by '>' and text by '<'.
-```
-                                     
-#### - Penalties
-
-```                                                  
-          --lineal-penalties|p M,X,I,D
-            Selects gap-lineal penalties for those alignment algorithms that use this penalty model.
-            Example: --lineal-penalties="-1,1,2,2"
-                
-          --affine-penalties|g M,X,O,E
-            Selects gap-affine penalties for those alignment algorithms that use this penalty model.
-            Example: --affine-penalties="-1,4,2,6" 
-          
-```
-                         
-#### - Specifics
-
-```                                                  
-          --bandwidth <INT>
-            Selects the bandwidth size for those algorithms that use bandwidth strategy. 
-                
-          --minimum-wavefront-length <INT>
-            Selects the minimum wavefront length to trigger the WFA-Adapt reduction method.
-            
-          --maximum-difference-distance <INT>
-            Selects the maximum difference distance for the WFA-Adapt reduction method.  
-```
-                   
-#### - Misc
-
-```                                                       
-          --progress|P <integer>
-            Set the progress message periodicity.
-            
-          --check|c 'correct'|'score'|'alignment'                    
-            Activates the verification of the alignment results. 
-          
-          --check-distance 'edit'|'gap-lineal'|'gap-affine'
-            Select the alignment-model to use for verification of the results.
-          
-          --check-bandwidth <INT>
-            Sets a bandwidth for the simple verification functions.
-
-          --help|h
-            Outputs a succinct manual for the tool.
+```C++
+// Display CIGAR & score
+string cigar = aligner.getAlignmentCigar();
+cout << "CIGAR: " << cigar  << endl;
+cout << "Alignment score " << aligner.getAlignmentScore() << endl;
 ```
 
+**IMPORTANT.** Once an alignment object is created, **it is strongly recommended to reuse it to compute multiple alignments**. Creating and destroying the alignment object for every alignment computed can have a significant overhead. Reusing the alignment object allows repurposing internal data structures, minimising the cost of memory allocations, and avoiding multiple alignment setups and precomputations.
 
-## 5. AUTHORS
+## <a name="wfa2.features"></a> 3. WFA2-LIB FEATURES
 
-  Santiago Marco-Sola \- santiagomsola@gmail.com     
+* **Exact alignment** method that computes the optimal **alignment score** and/or **alignment CIGAR**.
+* Supports **multiple distance metrics** (i.e., indel, edit, gap-lineal, gap-affine, and dual-gap gap-affine).
+* Allows performing **end-to-end** (a.k.a. global) and **ends-free** (e.g., semi-global, extension, overlap) alignment.
+* Implements **low-memory modes** to reduce and control memory consumption.
+* Supports various **heuristic strategies** to use on top of the core WFA algorithm.
+* WFA2-lib **operates with plain ASCII strings**. Although we mainly focus on aligning DNA/RNA sequences, the WFA algorithm and the WFA2-lib implementation work with any pair of strings. Moreover, these sequences do not have to be pre-processed (e.g., packed or profiled), nor any table must be precomputed (like the query profile, used within some Smith-Waterman implementations).
+* Due to its simplicity, the WFA algorithm can be automatically vectorized for any SIMD-compliant CPU supported by the compiler. For this reason, **the WFA2-lib implementation is independent of any specific ISA or processor model**. Unlike other hardware-dependent libraries, we aim to offer a multiplatform pairwise-alignment library that can be executed on different processors and models (e.g., SSE, AVX2, AVX512, POWER-ISA, ARM, NEON, SVE, SVE2, RISCV-RVV, ...).
 
-## 6. REPORTING BUGS
+### <a name="wfa2.distances"></a> 3.1 Distance Metrics
 
-Feedback and bug reporting it's highly appreciated. 
-Please report any issue or suggestion on github, or by email to the main developer (santiagomsola@gmail.com).
+The WFA2 library implements the wavefront algorithm for the most widely used distance metrics. The practical alignment time can change depending on the distance function, although the computational complexity always remains proportional to the alignment score or distance. The WFA2 library offers the following distance metrics or functions:
 
-## 7. LICENSE
+- **Indel (or LCS).** Produces alignments allowing matches, insertions, and deletions with unitary cost (i.e., {M,I,D} = {0,1,1}) but not mismatches. Also known as the longest common subsequence (LCS) problem. The LCS is defined as the longest subsequence common to both sequences, provided that the characters of the subsequence are not required to occupy consecutive positions within the original sequences. 
 
-WFA is distributed under MIT licence.
+```
+    PATTERN    A-GCTA-GTGTC--AATGGCTACT-T-T-TCAGGTCCT
+               |  ||| |||||    |||||||| | | |||||||||
+    TEXT       AA-CTAAGTGTCGG--TGGCTACTATATATCAGGTCCT
+    ALIGNMENT  1M1I1D3M1I5M2I2D8M1I1M1I1M1I9M
+```
 
-## 8. CITATION
+```C
+    // Configuration
+    wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+    attributes.distance_metric = indel;
+```
+
+- **Edit (a.k.a. Levenshtein).** Produces alignments allowing matches, mismatches, insertions, and deletions with unitary cost (i.e., {M,X,I,D} = {0,1,1,1}). Edit or Levenshtein distance between two sequences is the minimum number of single-character edits (i.e., insertions, deletions, or mismatches) required to transform one sequence into the other.
+
+```
+    PATTERN    AGCTA-GTGTCAATGGCTACT-T-T-TCAGGTCCT
+               | ||| |||||  |||||||| | | |||||||||
+    TEXT       AACTAAGTGTCGGTGGCTACTATATATCAGGTCCT
+    ALIGNMENT  1M1X3M1I5M2X8M1I1M1I1M1I9M
+```
+
+```C
+    // Configuration
+    wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+    attributes.distance_metric = edit;
+```
+
+- **Gap-linear (as in Needleman-Wunsch).** Produces alignments allowing matches, mismatches, insertions, and deletions. Allows assigning a penalty (a.k.a. cost or weight) to each alignment operation. It computes the optimal alignment, minimizing the overall cost to transform one sequence into the other. Under the gap-linear model, the alignment score is computed based on {X,I}⁠, where X corresponds to the mismatch penalty and the gap penalty is expressed as the function l(N)=N·I (given the length of the gap N and the gap penalty I).
+
+```
+    PATTERN    A-GCTA-GTGTC--AATGGCTACT-T-T-TCAGGTCCT
+               |  ||| |||||    |||||||| | | |||||||||
+    TEXT       AA-CTAAGTGTCGG--TGGCTACTATATATCAGGTCCT
+    ALIGNMENT  1M1I1D3M1I5M2I2D8M1I1M1I1M1I9M
+```
+
+```C
+    // Configuration
+    wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+    attributes.distance_metric = gap_linear;
+    attributes.linear_penalties.mismatch = 6; // X > 0 
+    attributes.linear_penalties.indel = 2;    // I > 0
+```
+
+- **Gap-affine (as in Smith-Waterman-Gotoh).** Linear gap cost functions can lead to alignments populated with small gaps. Long gaps are preferred in certain scenarios, like genomics or evolutionary studies (understood as a single event). Under the gap-affine model, the alignment score is computed based on {X,O,E}⁠, where X corresponds to the mismatch penalty and the gap penalty is expressed as the function g(N)=O+N·E (given the length of the gap N, the gap opening penalty O, and the gap extension penalty E).
+
+```
+    PATTERN    AGCTA-GTGTCAATGGCTACT---TTTCAGGTCCT
+               | ||| |||||  ||||||||   | |||||||||
+    TEXT       AACTAAGTGTCGGTGGCTACTATATATCAGGTCCT
+    ALIGNMENT  1M1X3M1I5M2X8M3I1M1X9M
+```
+
+```C
+    // Configuration
+    wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+    attributes.distance_metric = gap_affine;
+    attributes.affine_penalties.mismatch = 6;      // X > 0
+    attributes.affine_penalties.gap_opening = 4;   // O >= 0
+    attributes.affine_penalties.gap_extension = 2; // E > 0
+```
+
+- **Dual-cost gap-affine distances.** Also known as piece-wise gap-affine cost, this distance metric addresses some issues that the regular gap-affine distance has with long gaps. In a nutshell, the regular gap-affine distance can occasionally split long gaps by sporadic mismatches (often when aligning long and noisy sequences). Instead, many users would prefer to increase the open gap cost to produce a single long gap. For that, the dual-cost gap-affine distance (p=2) defines two affine cost functions (i.e., for short and long gaps). Then, the alignment score is computed based on {X,O1,E1,O2,E2}⁠, where X corresponds to the mismatch penalty and the gap penalty is expressed as the function g(N)=min{O1+N·E1,O2+N·E2} (given the length of the gap N, the gap opening penalties O1 and O2, and the gap extension penalties E1 and E2).
+
+```C
+    wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+    attributes.distance_metric = gap_affine_2p;
+    attributes.affine2p_penalties.mismatch = 6;       // X > 0
+    attributes.affine2p_penalties.gap_opening1 = 4;   // O1 >= 0
+    attributes.affine2p_penalties.gap_extension1 = 2; // E1 > 0
+    attributes.affine2p_penalties.gap_opening2 = 12;  // O2 >= 0
+    attributes.affine2p_penalties.gap_extension2 = 1; // E2 > 0
+```
+
+### <a name="wfa2.scope"></a> 3.2 Alignment Scope
+
+Depending on the use case, it is often the case that an application is only required to compute the alignment score, not the complete alignment (i.e., CIGAR). As it happens with traditional dynamic programming algorithms, the WFA algorithm requires less memory (i.e., `O(s)`) to compute the alignment score. In turn, this results in slighter faster alignment executions. For this reason, the WFA2 library implements two different modes depending on the alignment scope: score-only and full-CIGAR alignment. 
+
+The ** score-only alignment ** mode computes only the alignment score. This mode utilizes only the front-wavefronts of the WFA algorithm to keep track of the optimal alignment score. As a result, it requires `O(s)` memory and, in practice, performs slighter faster than the standard full-CIGAR mode. 
+
+```C
+    wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+    attributes.alignment_scope = compute_score;
+```
+
+The ** full-CIGAR alignment ** computes the sequence of alignment operations (i.e., {'M','X','D','I'}) that transforms one sequence into the other (i.e., alignment CIGAR). The alignment score can be obtained as a by-product of the alignment process, evaluating the score of the alignment CIGAR. This mode requires `O(s^2)` memory (using the default memory mode, wavefront_memory_high) or less (using the low-memory modes).
+
+
+```C
+    wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+    attributes.alignment_scope = compute_alignment;
+```
+
+### <a name="wfa2.span"></a> 3.3 Alignment Span
+
+The WFA2 library allows computing alignments with different spans or shapes. Although there is certain ambiguity and confusion in the terminology, we have tried to generalize the different options available to offer flexible parameters that can capture multiple alignment scenarios. During the development of the WFA we decided to adhere to the classical approximate string matching terminology where we align a **pattern (a.k.a. query or sequence)** against a **text (a.k.a. target, database, or reference)**.
+
+- **End-to-end alignment.** Also known as global alignment, this alignment mode forces aligning the two sequences from the beginning to end of both.
+
+```
+    PATTERN    AATTAATTTAAGTCTAGGCTACTTTCGGTACTTTGTTCTT
+               ||||    ||||||||||||||||||||||||||   |||
+    TEXT       AATT----TAAGTCTAGGCTACTTTCGGTACTTT---CTT
+```
+
+```C
+    wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+    attributes.alignment_form.span = alignment_end2end;
+```
+
+- **Ends-free alignment.** This alignment mode allows leading and trailing insertions or deletions for "free" (i.e., no penalty/cost on the overall alignment score). Moreover, this alignment mode allows determining the maximum gap length allowed for free at the beginning and end of the sequences. Note that this mode does not implement local alignment as it does not allow free insertions and deletions at the beginning/end of the sequences at the same time. However, it allows many different configurations used across different analyses, methods, and tools.
+
+```
+    PATTERN    AATTAATTTAAGTCTAGGCTACTTTCGGTACTTTGTTCTT
+                   |||||||||||||||||||||||||||||| ||   
+    TEXT       ----AATTTAAGTCTAGGCTACTTTCGGTACTTTCTT---
+```
+
+```C
+    wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+    attributes.alignment_form.span = alignment_endsfree;
+    attributes.alignment_form.pattern_begin_free = pattern_begin_free;
+    attributes.alignment_form.pattern_end_free = pattern_end_free;
+    attributes.alignment_form.text_begin_free = text_begin_free;
+    attributes.alignment_form.text_end_free = text_end_free;
+```
+
+- **Other**
+
+<details><summary>Glocal alignment (a.k.a. semi-global or fitting)</summary>
+<p>
+
+- **Glocal alignment (a.k.a. semi-global or fitting).** Alignment mode where the pattern is globally aligned and the text is locally aligned. Often due to the large size of one of the sequences (e.g., the text sequence being a genomic reference), this alignment mode forces one sequence (i.e., pattern) to align globally to a substring of the other (i.e., text).
+
+```
+    PATTERN    -------------AATTTAAGTCTAGGCTACTTTC---------------
+                            ||||||||| ||||||||||||               
+    TEXT       ACGACTACTACGAAATTTAAGTATAGGCTACTTTCCGTACGTACGTACGT
+```
+
+```C
+    wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+    attributes.alignment_form.span = alignment_endsfree;
+    attributes.alignment_form.pattern_begin_free = 0;
+    attributes.alignment_form.pattern_end_free = 0;
+    attributes.alignment_form.text_begin_free = text_begin_free;
+    attributes.alignment_form.text_end_free = text_end_free;
+```
+
+</p>
+</details>
+
+<details><summary>Extension alignment</summary>
+<p>
+
+- **Extension alignment.** Alignment mode where the start of both pattern and text sequences are forced to be aligned. However, the ends of both are free. This alignment mode is typically used within seed-and-extend algorithms.
+
+```C
+    // Right extension
+    wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+    attributes.alignment_form.span = alignment_endsfree;
+    attributes.alignment_form.pattern_begin_free = 0;
+    attributes.alignment_form.pattern_end_free = pattern_end_free;
+    attributes.alignment_form.text_begin_free = 0;
+    attributes.alignment_form.text_end_free = text_end_free;
+    
+    PATTERN    AATTTAAGTCTG-CTACTTTCACGCA-GCT----------
+               ||||| |||||| ||||||||||| | | |          
+    TEXT       AATTTCAGTCTGGCTACTTTCACGTACGATGACAGACTCT
+```
+
+```C
+    // Left extension
+    wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+    attributes.alignment_form.span = alignment_endsfree;
+    attributes.alignment_form.pattern_begin_free = pattern_begin_free;
+    attributes.alignment_form.pattern_end_free = 0;
+    attributes.alignment_form.text_begin_free = text_begin_free;
+    attributes.alignment_form.text_end_free = 0;
+    
+    PATTERN    -------------AAACTTTCACGTACG-TGACAGTCTCT
+                              ||||||||||||| |||||| ||||
+    TEXT       AATTTCAGTCTGGCTACTTTCACGTACGATGACAGACTCT
+```
+
+</p>
+</details>
+
+<details><summary>Overlapped alignment</summary>
+<p>
+
+- **Overlapped alignment (a.k.a. dovetail).** 
+
+```C
+    // Overlapped (Right-Left)
+    wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+    attributes.alignment_form.span = alignment_endsfree;
+    attributes.alignment_form.pattern_begin_free = pattern_begin_free;
+    attributes.alignment_form.pattern_end_free = 0;
+    attributes.alignment_form.text_begin_free = 0;
+    attributes.alignment_form.text_end_free = text_end_free;
+    
+    PATTERN    ACGCGTCTGACTGACTGACTAAACTTTCATGTAC-TGACA-----------------
+                                   ||||||||| |||| |||||                 
+    TEXT       --------------------AAACTTTCACGTACGTGACATATAGCGATCGATGACT
+```
+
+```C
+    // Overlapped (Left-Right)
+    wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+    attributes.alignment_form.span = alignment_endsfree;
+    attributes.alignment_form.pattern_begin_free = 0;
+    attributes.alignment_form.pattern_end_free = pattern_end_free;
+    attributes.alignment_form.text_begin_free = text_begin_free;
+    attributes.alignment_form.text_end_free = 0;
+
+    PATTERN    ----------------------ACGCGTCTGACTGACTACGACTACGACTGACTAGCAT
+                                     ||||||||| || ||                      
+    TEXT       ACATGCATCGATCAGACTGACTACGCGTCTG-CTAAC----------------------
+```
+
+</p>
+</details>
+
+### <a name="wfa2.mem"></a> 3.4 Memory modes
+
+The WFA2 library implements various memory modes: `wavefront_memory_high`, `wavefront_memory_med`, `wavefront_memory_low`. These modes allow regulating the overall memory consumption at the expense of execution time. The standard WFA algorithm, which stores explicitly all wavefronts in memory, correspond to the mode `wavefront_memory_high`. The other methods progressively reduce memory usage at the expense of slightly larger alignment times. These memory modes can be used transparently with other alignment options and generate identical results. Note that this option does not affect the score-only alignment mode (it already uses a minimal memory footprint of `O(s)`).
+
+```C
+  wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+  attributes.memory_mode = wavefront_memory_med;
+```
+
+### <a name="wfa2.heuristics"></a> 3.5 Heuristic modes
+
+The WFA algorithm can be used combined with many heuristics to reduce the alignment time and memory used. As it happens to other alignment methods, heuristics can result in suboptimal solutions and loss of accuracy. Moreover, some heuristics may drop the alignment if the sequences exceed certain divergence thresholds (i.e., x-drop/z-drop). Due to the popularity and efficiency of these methods, the WFA2 library implements many of these heuristics. Note, **it is not about how little DP-matrix you compute, but about how good the resulting alignments are.**
+
+- **None (for comparison)**. If no heuristic is used, the WFA behaves exploring cells of the DP-matrix in increasing score order (increasing scores correspond to colours from blue to red). 
+
+<p align="center">
+<table>
+  <tr>
+    <td><p align="center">Full-WFA</p></td>
+  </tr>
+  <tr>
+    <td><img src="img/heuristics.none.png" align="center" width="400px"></td>
+  </tr>
+</table>
+</p>
+
+```C
+  wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+  attributes.heuristic.strategy = wf_heuristic_none;
+```
+
+- **Banded alignment.** Sets a fixed band in the diagonals preventing the wavefront from growing beyond those limits. It allows setting the minimum diagonal (i.e., min_k) and maximum diagonal (i.e., max_k).
+
+<p align="center">
+<table>
+  <tr>
+    <td><p align="center">Banded(10,10)</p></td>
+    <td><p align="center">Banded(10,150)</p></td>
+  </tr>
+  <tr>
+    <td><img src="img/heuristics.band.10.10.png" align="center" width="400px"></td>
+    <td><img src="img/heuristics.band.10.150.png" align="center" width="400px"></td>
+  </tr>
+</table>
+</p>
+
+```C
+  wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+  attributes.heuristic.strategy = wf_heuristic_banded_static;
+  attributes.heuristic.min_k = -10;
+  attributes.heuristic.max_k = +10;
+```
+
+- **Adaptive-Band alignment.** Similar to the static-band heuristic, it allows the band to move towards the diagonals closer to the end of the alignment. Unlike the static-band that is performed on each step, the adaptive-band heuristics allows configuring the number of steps between heuristic band cut-offs.
+
+<p align="center">
+<table>
+  <tr>
+    <td><p align="center">Adaptive-Band(10,10,1)</p></td>
+    <td><p align="center">Adaptive-Band(50,50,1)</p></td>
+  </tr>
+  <tr>
+    <td><img src="img/heuristics.aband.10.10.png" align="center" width="400px"></td>
+    <td><img src="img/heuristics.aband.50.50.png" align="center" width="400px"></td>
+  </tr>
+</table>
+</p>
+
+```C
+  wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+  attributes.heuristic.strategy = wf_heuristic_banded_adaptive;
+  attributes.heuristic.min_k = -10;
+  attributes.heuristic.max_k = +10;
+  attributes.heuristic.steps_between_cutoffs = 1;
+```
+
+- **Adaptive-Wavefront alignment.** This WFA heuristic removes outer diagonals that are extremely far behind compared to other ones in the same wavefront. Unlike other methods, the adaptive-wavefront reduction heuristic prunes based on the potential of the diagonal to lead to the optimal solution without previous knowledge of the error between the sequences.
+
+<p align="center">
+<table>
+  <tr>
+    <td><p align="center">Adaptive-WF(10,50)</p></td>
+    <td><p align="center">Adaptive-WF(10,50,10)</p></td>
+  </tr>
+  <tr>
+    <td><img src="img/heuristics.wfadap.10.50.1.png" align="center" width="400px"></td>
+    <td><img src="img/heuristics.wfadap.10.50.10.png" align="center" width="400px"></td>
+  </tr>
+</table>
+</p>
+
+```C
+  wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+  attributes.heuristic.strategy = wf_heuristic_wfadaptive;
+  attributes.heuristic.min_wavefront_length = 10;
+  attributes.heuristic.max_distance_threshold = 50;
+  attributes.heuristic.steps_between_cutoffs = 1;
+```
+
+- **X-drop.** [Under Testing] Implements the classical X-drop heuristic to abandon diagonals (or even alignments) that fall more than X from the previous best-observed score.
+
+```C
+  wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+  attributes.heuristic.strategy = wf_heuristic_xdrop;
+  attributes.heuristic.xdrop = 100;
+  attributes.heuristic.steps_between_cutoffs = 100;
+```
+
+- **Z-drop**. [Under Testing] Implements the Z-drop heuristic. It drops the diagonals (or even the alignment) if the score drops too fast in the diagonal direction.
+
+```C
+  wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+  attributes.heuristic.strategy = wf_heuristic_zdrop;
+  attributes.heuristic.zdrop = 100;
+  attributes.heuristic.steps_between_cutoffs = 100;
+```
+
+<!-- ### <a name="wfa2.other"></a> 3.6 Other features -->
+
+## <a name="wfa2.complains"></a> 4. REPORTING BUGS AND FEATURE REQUEST
+
+Feedback and bug reporting is highly appreciated. Please report any issue or suggestion on github or email to the main developer (santiagomsola@gmail.com).
+
+## <a name="wfa2.licence"></a> 5. LICENSE
+
+WFA2-lib is distributed under MIT licence.
+
+## <a name="wfa2.complains"></a> 6. AUTHORS
+
+[Santiago Marco-Sola](https://github.com/smarco) (santiagomsola@gmail.com) is the main developer and the person you should address your complaints.
+
+[Andrea Guarracino](https://github.com/AndreaGuarracino) and [Erik Garrison](https://github.com/ekg) have contributed to the design of new features and intensive testing of this library.
+
+Miquel Moretó has contributed with fruitful technical discussions and tireless efforts seeking funding, so we could keep working on this project.
+
+## <a name="wfa2.complains"></a> 7. ACKNOWLEDGEMENTS
+
+- Baoxing Song and Buckler's lab for their interest and help promoting the WFA and pushing for the inclusion of new features.
+
+- Juan Carlos Moure and Antonio Espinosa for their collaboration and support of this project.
+
+## <a name="wfa2.cite"></a> 8. CITATION
 
 **Santiago Marco-Sola, Juan Carlos Moure, Miquel Moreto, Antonio Espinosa**. ["Fast gap-affine pairwise alignment using the wavefront algorithm."](https://doi.org/10.1093/bioinformatics/btaa777) Bioinformatics, 2020.
+
