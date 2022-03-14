@@ -10,7 +10,8 @@ SRC_WFA_CPU=utils/wfa_cpu.c
 SRC_TEST=$(wildcard tests/test_*.cu)
 ARGS=-I . -Ilib/
 ARGS_ALIGNER=-Wall -Lbuild/ -L/usr/local/cuda/lib64 $(ARGS)
-ARGS_WFA_CPU=-Wall -Lexternal/WFA/lib/ $(ARGS) -Iexternal/WFA/ -lwfa -fopenmp
+ARGS_TESTS=-Lbuild/ -L/usr/local/cuda/lib64 $(ARGS)
+ARGS_WFA_CPU=-Lexternal/WFA/lib/ $(ARGS) -Iexternal/WFA/ -lwfa
 NVCC_OPTIONS=-O3 -maxrregcount=64 -gencode arch=compute_$(COMPUTE),code=sm_$(SM) -Xptxas -v -Xcompiler -fopenmp
 
 aligner: wfa-cpu wfa-gpu-so $(SRC_ALIGNER)
@@ -35,10 +36,10 @@ tests: test-packing test-alignment
 	mv $^ bin/
 
 test-packing: tests/test_packing_kernel.cu wfa-cpu wfa-gpu-so
-	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS_ALIGNER) utils/verification.c $< -lwfagpu $(ARGS_WFA_CPU) -o $@
+	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS_TESTS) utils/verification.c $< -lwfagpu $(ARGS_WFA_CPU) -o $@
 
 test-alignment: tests/test_alignment_kernel.cu wfa-cpu wfa-gpu-so
-	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS_ALIGNER) $< utils/verification.c -lwfagpu $(ARGS_WFA_CPU) -o $@
+	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS_TESTS) $< utils/verification.c -lwfagpu $(ARGS_WFA_CPU) -o $@
 
 wfa-gpu-so: $(SRC_LIB) external/WFA
 	mkdir -p build
@@ -63,7 +64,7 @@ external/WFA:
 
 wfa-cpu: $(SRC_WFA_CPU)
 	mkdir -p build
-	$(CC) $(ARGS) $(ARGS_WFA_CPU) -fPIC -c $^
+	$(CC) $(ARGS) $(ARGS_WFA_CPU) -fopenmp -Wall -fPIC -c $^
 	mv *.o build/
 
 wfa-gpu: $(SRC_LIB) wfa-cpu
