@@ -8,9 +8,9 @@ SRC_ALIGNER=tools/aligner.c utils/arg_handler.c utils/sequence_reader.c
 SRC_LIB=$(SRC_PATH)/kernels/sequence_alignment_kernel.cu $(SRC_PATH)/kernels/sequence_packing_kernel.cu $(wildcard $(SRC_PATH)/*.cu) utils/verification.c utils/device_query.cu
 SRC_WFA_CPU=utils/wfa_cpu.c
 SRC_TEST=$(wildcard tests/test_*.cu)
-ARGS=-Wall -I . -Ilib/
-ARGS_ALIGNER=-Lbuild/ -L/usr/local/cuda/lib64 $(ARGS)
-ARGS_WFA_CPU=-Lexternal/WFA/lib/ $(ARGS) -Iexternal/WFA/ -lwfa -fopenmp
+ARGS=-I . -Ilib/
+ARGS_ALIGNER=-Wall -Lbuild/ -L/usr/local/cuda/lib64 $(ARGS)
+ARGS_WFA_CPU=-Wall -Lexternal/WFA/lib/ $(ARGS) -Iexternal/WFA/ -lwfa -fopenmp
 NVCC_OPTIONS=-O3 -maxrregcount=64 -gencode arch=compute_$(COMPUTE),code=sm_$(SM) -Xptxas -v -Xcompiler -fopenmp
 
 aligner: wfa-cpu wfa-gpu-so $(SRC_ALIGNER)
