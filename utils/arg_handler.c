@@ -175,6 +175,9 @@ void print_usage (const options_t options) {
                 case ARG_BOOL:
                     type_str = "bool";
                     break;
+                case ARG_NO_VALUE:
+                    type_str = "flag";
+                    break;
             }
 
             if (curr_option.type == ARG_NO_VALUE) {

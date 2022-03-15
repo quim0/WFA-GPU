@@ -38,6 +38,7 @@ int compute_alignments_cpu_threaded (const int batch_size,
     attributes.affine_penalties.mismatch = x;
     attributes.affine_penalties.gap_opening = o;
     attributes.affine_penalties.gap_extension = e;
+    attributes.memory_mode = wavefront_memory_med;
     attributes.heuristic.strategy = wf_heuristic_none;
 
     int alignments_computed_cpu = 0;
@@ -46,7 +47,7 @@ int compute_alignments_cpu_threaded (const int batch_size,
     {
     // Each thread reuse the aligner
     wavefront_aligner_t* const wf_aligner = wavefront_aligner_new(&attributes);
-    #pragma omp for
+    #pragma omp for schedule(dynamic)
     for (int i=0; i<batch_size; i++) {
         int real_i = i + from;
         if (!results[i].finished) {
