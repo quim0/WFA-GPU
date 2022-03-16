@@ -71,9 +71,9 @@ void launch_alignments_batched (const char* sequences_buffer,
     char *d_seq_buffer_unpacked;
     size_t mem_needed_unpacked = sequences_metadata[batch_size-1].text_offset +
                                  sequences_metadata[batch_size-1].text_len + 1;
-    // Make the buffer 20% bigger to have some extra room in case next batch
+    // Make the buffer 50% bigger to have some extra room in case next batch
     // have slightly bigger sequences
-    mem_needed_unpacked *= 1.2;
+    mem_needed_unpacked *= 1.5;
 
     LOG_DEBUG("Allocating %.2f MiB to store the unpacked sequences on the device.",
               (float(mem_needed_unpacked) / (1<<20)));
@@ -102,8 +102,8 @@ void launch_alignments_batched (const char* sequences_buffer,
                         + (4 - (text_length_packed % 4)));
     }
 
-    // Make buffer 20% bigger
-    mem_needed_packed *= 1.2;
+    // Make buffer 50% bigger
+    mem_needed_packed *= 1.5;
     mem_needed_packed = mem_needed_packed - (4 - (mem_needed_packed % 4));
 
     LOG_DEBUG("Allocating %.2f MiB to store the packed sequences on the device.",
@@ -218,7 +218,9 @@ void launch_alignments_batched (const char* sequences_buffer,
                     results,
                     sequences_metadata,
                     sequences_buffer,
-                    penalties.x, penalties.o, penalties.e
+                    penalties.x, penalties.o, penalties.e,
+                    // Use heuristic WFA-CPU if banded WFA-GPU is being used
+                    (band > 0)
                     );
 
             if (alignments_computed_cpu > 0) {
@@ -278,13 +280,6 @@ void launch_alignments_batched (const char* sequences_buffer,
                     bool gpu_distance_ok = (distance == cpu_computed_distance);
                     if (!gpu_distance_ok) {
                         LOG_ERROR("Incorrect distance (%d). GPU=%d, CPU=%d", i, distance, cpu_computed_distance)
-                        printf("pattern: %s\ntext: %s\nplen=%zu, tlen=%zu\n", pattern, text, plen, tlen);
-                        printf("GPU cigar: %s\n", cigar);
-                        pprint_cigar_cpu(
-                            pattern, text, plen, tlen,
-                            penalties.x, penalties.o, penalties.e
-                        );
-                        printf("\n");
                     }
 
                     avg_distance += distance;
@@ -323,6 +318,10 @@ void launch_alignments_batched (const char* sequences_buffer,
                            ? num_alignments-1 : (((batch+2) * batch_size) - 1);
             bytes_to_copy_seqs = bytes_to_copy_unpacked(next_from, next_to,
                                                         sequences_metadata);
+            if (bytes_to_copy_seqs > mem_needed_unpacked) {
+                LOG_ERROR("Sequences buffer is too small to fit the current batch. Aborting.");
+                break;
+            }
             initial_seq = &sequences_buffer[sequences_metadata[next_from].pattern_offset];
             cudaMemcpyAsync(d_seq_buffer_unpacked, initial_seq, bytes_to_copy_seqs,
                             cudaMemcpyHostToDevice, stream1);
@@ -355,30 +354,16 @@ void launch_alignments_batched (const char* sequences_buffer,
     }
 
     // Compute alignments of the last batch that need to be computed on CPU
-    int alignments_computed_cpu = 0;
-    for (int i=0; i<curr_batch_size; i++) {
-        int real_i = i + from;
-        if (!results[i].finished) {
-            alignments_computed_cpu++;
-
-            size_t toffset = sequences_metadata[real_i].text_offset;
-            size_t poffset = sequences_metadata[real_i].pattern_offset;
-
-            const char* text = &sequences_buffer[toffset];
-            const char* pattern = &sequences_buffer[poffset];
-
-            size_t tlen = sequences_metadata[real_i].text_len;
-            size_t plen = sequences_metadata[real_i].pattern_len;
-
-            results[i].distance = compute_alignment_cpu(
-                pattern, text,
-                plen, tlen,
-                penalties.x, penalties.o, penalties.e
+    int alignments_computed_cpu = compute_alignments_cpu_threaded(
+            curr_batch_size,
+            from,
+            results,
+            sequences_metadata,
+            sequences_buffer,
+            penalties.x, penalties.o, penalties.e,
+            // Use heuristic WFA-CPU if banded WFA-GPU is being used
+            (band > 0)
             );
-
-            // TODO: CIGAR ?
-        }
-    }
 
     if (alignments_computed_cpu > 0) {
         LOG_INFO("(Batch %d) %d/%d alignemnts could not be computed on the"
@@ -457,77 +442,3 @@ void launch_alignments_batched (const char* sequences_buffer,
     cudaFree(bt_offloaded_d);
     cudaFree(wf_data_buffer);
 }
-
-#if 0
-extern "C" void launch_alignments (const char* sequences_buffer,
-                         const size_t sequences_buffer_size,
-                         sequence_pair_t* sequences_metadata,
-                         const size_t num_alignments,
-                         const affine_penalties_t penalties,
-                         alignment_result_t* results,
-                         wfa_backtrace_t* backtraces,
-                         const int max_distance,
-                         const int threads_per_block) {
-    // TODO: Make this stream reusable instead of creating a new one per batch
-    //cudaStream_t stream;
-    //cudaStreamCreate(&stream);
-    // Sequence packing
-    char* d_seq_buffer_unpacked;
-    char* d_seq_buffer_packed;
-    sequence_pair_t* d_sequences_metadata;
-    size_t seq_buffer_packed_size;
-
-    prepare_pack_sequences_gpu(
-        sequences_buffer,
-        sequences_buffer_size,
-        sequences_metadata,
-        num_alignments,
-        &d_seq_buffer_unpacked,
-        &d_seq_buffer_packed,
-        &seq_buffer_packed_size,
-        &d_sequences_metadata
-    );
-
-    pack_sequences_gpu_async(
-        d_seq_buffer_unpacked,
-        d_seq_buffer_packed,
-        d_sequences_metadata,
-        num_alignments,
-        0
-    );
-
-    // Results of the alignments
-    // TODO: CudaMallocAsync (?)
-    alignment_result_t *results_d;
-    cudaMalloc(&results_d, num_alignments * sizeof(alignment_result_t));
-    CUDA_CHECK_ERR
-
-    wfa_backtrace_t* bt_offloaded_d;
-    // TODO: max_distance == max_steps (?)
-    allocate_offloaded_bt_d(&bt_offloaded_d, max_distance, num_alignments);
-
-    uint8_t* wf_data_buffer;
-    allocate_wf_data_buffer_d(&wf_data_buffer, max_distance,
-                              penalties, num_alignments);
-
-    // TODO: max_distance == max_steps (?)
-    launch_alignments_async(
-        d_seq_buffer_packed,
-        d_sequences_metadata,
-        num_alignments,
-        penalties,
-        results,
-        backtraces,
-        results_d,
-        bt_offloaded_d,
-        wf_data_buffer,
-        max_distance,
-        threads_per_block,
-        0
-    );
-
-    cudaFree(results_d);
-    cudaFree(bt_offloaded_d);
-    cudaFree(wf_data_buffer);
-}
-#endif

@@ -30,7 +30,8 @@ int compute_alignments_cpu_threaded (const int batch_size,
                                       alignment_result_t* results,
                                       const sequence_pair_t* sequences_metadata,
                                       const char* sequences_buffer,
-                                      const int x, const int o, const int e) {
+                                      const int x, const int o, const int e,
+                                      const bool adaptative) {
     wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
 
     attributes.distance_metric = gap_affine;
@@ -38,8 +39,8 @@ int compute_alignments_cpu_threaded (const int batch_size,
     attributes.affine_penalties.mismatch = x;
     attributes.affine_penalties.gap_opening = o;
     attributes.affine_penalties.gap_extension = e;
-    attributes.memory_mode = wavefront_memory_med;
-    attributes.heuristic.strategy = wf_heuristic_none;
+    attributes.memory_mode = wavefront_memory_low;
+    if (!adaptative) attributes.heuristic.strategy = wf_heuristic_none;
 
     int alignments_computed_cpu = 0;
 
