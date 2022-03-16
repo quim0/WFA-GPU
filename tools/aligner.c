@@ -36,6 +36,8 @@
 #include <errno.h>
 #include <string.h>
 
+#define MAX(A, B) (((A) > (B)) ? (A) : (B))
+
 #define NUM_ARGUMENTS 9
 #define NUM_CATEGORIES 3
 
@@ -132,7 +134,8 @@ int main(int argc, char** argv) {
          },
          // 8
         {.name = "Band",
-         .description = "Wavefront band (highest and lower diagonal that will be computed).",
+         .description = "Wavefront band (highest and lower diagonal that will be computed)."
+                        " Use \"auto\" to use an automatically generated band according to other parameters.",
          .category = CAT_ALIGN,
          .short_arg = 'B',
          .long_arg = "band",
@@ -191,6 +194,8 @@ int main(int argc, char** argv) {
     penalties.o = o;
     penalties.e = e;
 
+    LOG_INFO("Penalties: M=0, X=%d, O=%d, E=%d.", penalties.x, penalties.o, penalties.e)
+
     DEBUG_CLOCK_INIT()
     DEBUG_CLOCK_START()
 
@@ -206,15 +211,18 @@ int main(int argc, char** argv) {
     if (opt_max_distance->parsed) {
         max_distance = opt_max_distance->value.int_val;
     } else {
-        max_distance = sequence_reader.sequences_metadata[0].text_len
-                       + sequence_reader.sequences_metadata[0].pattern_len;
-        max_distance /= 1.5;
-        if (max_distance > 10000) {
+        // Assume error is about 10% between sequences, alignments that go
+        // beyond this error will be offloaded to the CPU
+        max_distance = MAX(sequence_reader.sequences_metadata[0].text_len,
+                           sequence_reader.sequences_metadata[0].pattern_len) * 0.1;
+        max_distance *= MAX(x, MAX(o, e));
+        if (max_distance > 8000) {
             LOG_WARN("Automatically genereated maximum error supported by the"
                      " kernel seems to be very high, to avoid running out of "
                      "memory, consider limiting the maximum error with the "
                      "'-e' argument.");
         }
+        LOG_INFO("No maximum error provided by the user, using %d", max_distance)
     }
 
     // Threads per block
@@ -222,6 +230,10 @@ int main(int argc, char** argv) {
     option_t* opt_tpb = get_option(options, 't');
     if (opt_tpb->parsed) {
         threads_per_block = opt_tpb->value.int_val;
+        if (threads_per_block % 32) {
+            LOG_WARN("CUDA devices use \"warps\" of 32 lanes, use a number of "
+                     "threads multiple of 32 to better utilise GPU resources.")
+        }
     } else {
         // If it is not provided by the user, use the maximum distance as a
         // hint.
@@ -233,8 +245,7 @@ int main(int argc, char** argv) {
         else                         threads_per_block = 1024;
     }
 
-    LOG_INFO("Penalties: M=0, X=%d, O=%d, E=%d. Maximum distance: %d",
-             penalties.x, penalties.o, penalties.e, max_distance)
+    LOG_INFO("Using %d threads per worker.", threads_per_block)
 
     size_t num_alignments = sequence_reader.num_sequences_read / 2;
 
@@ -243,6 +254,7 @@ int main(int argc, char** argv) {
     if (opt_batch_size->parsed) {
         batch_size = opt_batch_size->value.int_val;
     } else {
+        LOG_WARN("Consider giving a batch size (-b BATCH_SIZE) to get better performance.")
         batch_size = num_alignments;
     }
 
@@ -277,9 +289,24 @@ int main(int argc, char** argv) {
     option_t* opt_band = get_option(options, 'B');
     if (opt_band->parsed) {
         band = opt_band->value.int_val;
-        if (band <= 0) {
+        if (band < 0) {
             LOG_ERROR("Band must positive (band=%d).", band)
             exit(-1);
+        }
+        if (band == 0) {
+            // Automatic band = number of threads to maximise utilisation
+            band = threads_per_block / 2 - 1;
+
+        }
+        if ((2 * band + 1) < (threads_per_block-1)) {
+            // Some threads will be never used
+            LOG_WARN("Using band=%d produce a maximum wavefront size of %d, "
+                     "which is lower\n             than the number of CUDA threads "
+                     "working on each alignment (%d). To\n             "
+                     "maximise the GPU utilisation, use a band >=%d or reduce "
+                     "the number of\n             threads per worker (-t).",
+                     band, 2 * band + 1, threads_per_block,
+                     threads_per_block / 2 - 1)
         }
         LOG_INFO("Banded execution. Max diagonal: %d, Min diagonal: %d", band, -band)
     } else {
