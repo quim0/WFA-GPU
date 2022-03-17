@@ -28,6 +28,7 @@
 #include "affine_penalties.h"
 #include "alignment_results.h"
 #include "wfa_types.h"
+#include "alignment_parameters.h"
 #include "batch_async.cuh"
 
 #include <stdbool.h>
@@ -315,11 +316,19 @@ int main(int argc, char** argv) {
 
     alignment_result_t* results = (alignment_result_t*)calloc(num_alignments, sizeof(alignment_result_t));
     uint32_t backtraces_offloaded_elements = BT_OFFLOADED_RESULT_ELEMENTS(max_distance);
-    // TODO: * batch_size instead of * num_alignments (?)
     wfa_backtrace_t* backtraces = (wfa_backtrace_t*)calloc(
                                                     backtraces_offloaded_elements * num_alignments,
                                                     sizeof(wfa_backtrace_t)
                                                     );
+
+    wfa_alignment_options_t wfa_options = {0};
+    wfa_options.max_error = max_distance;
+    wfa_options.threads_per_block = threads_per_block;
+    wfa_options.num_workers = num_blocks;
+    wfa_options.band = band;
+    wfa_options.batch_size = batch_size;
+    wfa_options.num_alignments = num_alignments;
+    wfa_options.penalties = penalties;
 
     CLOCK_INIT()
     CLOCK_START()
@@ -328,15 +337,9 @@ int main(int argc, char** argv) {
         sequence_reader.sequences_buffer,
         sequence_reader.sequences_buffer_size,
         sequence_reader.sequences_metadata,
-        num_alignments,
-        penalties,
         results,
         backtraces,
-        max_distance,
-        threads_per_block,
-        num_blocks,
-        batch_size,
-        band,
+        wfa_options,
         check
     );
 

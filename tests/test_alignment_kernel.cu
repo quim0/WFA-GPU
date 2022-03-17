@@ -64,19 +64,22 @@ void test_one_alignment() {
                                                     sizeof(wfa_backtrace_t)
                                                     );
 
+    wfa_alignment_options_t options = {0};
+    options.max_error = MAX_STEPS;
+    options.threads_per_block = THREADS_PER_BLOCK;
+    options.num_workers = 3;
+    options.band = 0;
+    options.batch_size = 0;
+    options.num_alignments = num_alignments;
+    options.penalties = penalties;
+
     launch_alignments_batched(
         sequence_unpacked,
         seq_buf_size,
         sequence_metadata,
-        num_alignments,
-        penalties,
         &results,
         backtraces,
-        MAX_STEPS,
-        THREADS_PER_BLOCK,
-        3, // Num blocks, make it bigger than 1 to test
-        num_alignments, // Batch size
-        0, // Band
+        options,
         false // check correctness
     );
 
@@ -85,20 +88,15 @@ void test_one_alignment() {
     TEST_ASSERT(results.distance == 7)
 
     penalties = {.x = 1, .o = 0, .e = 1};
+    options.penalties = penalties;
 
     launch_alignments_batched(
         sequence_unpacked,
         seq_buf_size,
         sequence_metadata,
-        num_alignments,
-        penalties,
         &results,
         backtraces,
-        MAX_STEPS,
-        THREADS_PER_BLOCK,
-        3, // Num blocks, make it bigger than 1 to test
-        num_alignments, // Batch size
-        0,
+        options,
         false // check correctness
     );
 
@@ -172,19 +170,22 @@ void test_multiple_alignments_affine () {
                                                     sizeof(wfa_backtrace_t)
                                                     );
 
+    wfa_alignment_options_t options = {0};
+    options.max_error = MAX_STEPS;
+    options.threads_per_block = THREADS_PER_BLOCK;
+    options.num_workers = 3;
+    options.band = 0;
+    options.batch_size = 0;
+    options.num_alignments = num_alignments;
+    options.penalties = penalties;
+
     launch_alignments_batched(
         sequence_unpacked,
         seq_buf_size,
         sequence_metadata,
-        num_alignments,
-        penalties,
         results,
         backtraces,
-        MAX_STEPS,
-        THREADS_PER_BLOCK,
-        3, // Num blocks, make it bigger than 1 to test
-        num_alignments, // Batch size
-        0, // Band
+        options,
         false // check correctness
     );
 
@@ -272,19 +273,22 @@ void test_multiple_alignments_edit () {
                                                     sizeof(wfa_backtrace_t)
                                                     );
 
+    wfa_alignment_options_t options = {0};
+    options.max_error = MAX_STEPS;
+    options.threads_per_block = THREADS_PER_BLOCK;
+    options.num_workers = 3;
+    options.band = 0;
+    options.batch_size = 0;
+    options.num_alignments = num_alignments;
+    options.penalties = penalties;
+
     launch_alignments_batched(
         sequence_unpacked,
         seq_buf_size,
         sequence_metadata,
-        num_alignments,
-        penalties,
         results,
         backtraces,
-        MAX_STEPS,
-        THREADS_PER_BLOCK,
-        3, // Num blocks, make it bigger than 1 to test
-        num_alignments, // Batch size
-        0, // Band
+        options,
         false // check correctness
     );
 
@@ -344,19 +348,22 @@ void test_distance_zero() {
                                                     sizeof(wfa_backtrace_t)
                                                     );
 
+    wfa_alignment_options_t options = {0};
+    options.max_error = MAX_STEPS;
+    options.threads_per_block = THREADS_PER_BLOCK;
+    options.num_workers = 3;
+    options.band = 0;
+    options.batch_size = 0;
+    options.num_alignments = num_alignments;
+    options.penalties = penalties;
+
     launch_alignments_batched(
         sequence_unpacked,
         seq_buf_size,
         sequence_metadata,
-        num_alignments,
-        penalties,
         &results,
         backtraces,
-        MAX_STEPS,
-        THREADS_PER_BLOCK,
-        3, // Num blocks, make it bigger than 1 to test
-        num_alignments, // Batch size
-        0, // Band
+        options,
         false // check correctness
     );
 
@@ -366,19 +373,15 @@ void test_distance_zero() {
 
     penalties = {.x = 1, .o = 0, .e = 1};
 
+    options.penalties = penalties;
+
     launch_alignments_batched(
         sequence_unpacked,
         seq_buf_size,
         sequence_metadata,
-        num_alignments,
-        penalties,
         &results,
         backtraces,
-        MAX_STEPS,
-        THREADS_PER_BLOCK,
-        3, // Num blocks, make it bigger than 1 to test
-        num_alignments, // Batch size
-        0, // Band
+        options,
         false // check correctness
     );
 

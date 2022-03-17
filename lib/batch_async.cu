@@ -41,17 +41,19 @@ size_t bytes_to_copy_unpacked (const int from,
 void launch_alignments_batched (const char* sequences_buffer,
                         const size_t sequences_buffer_size,
                         sequence_pair_t* const sequences_metadata,
-                        const size_t num_alignments,
-                        const affine_penalties_t penalties,
                         alignment_result_t* results,
                         wfa_backtrace_t* backtraces,
-                        const int max_distance,
-                        const int threads_per_block,
-                        const int num_blocks,
-                        size_t batch_size,
-                        const int band,
+                        wfa_alignment_options_t options,
                         bool check_correctness) {
     cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
+
+    const size_t num_alignments = options.num_alignments;
+    const affine_penalties_t penalties = options.penalties;
+    const int max_distance = options.max_error;
+    const int threads_per_block = options.threads_per_block;
+    const int num_blocks = options.num_workers;
+    size_t batch_size = options.batch_size;
+    const int band = options.band;
 
     if (batch_size == 0) batch_size = num_alignments;
     if (batch_size > num_alignments) batch_size = num_alignments;
