@@ -197,20 +197,26 @@ int main(int argc, char** argv) {
 
     LOG_INFO("Penalties: M=0, X=%d, O=%d, E=%d.", penalties.x, penalties.o, penalties.e)
 
-    DEBUG_CLOCK_INIT()
-    DEBUG_CLOCK_START()
+    LOG_INFO("Reading sequences file...")
+    CLOCK_INIT()
+    CLOCK_START()
 
     if (!read_n_sequences(&sequence_reader, &sequences_read)) {
         LOG_ERROR("Error reading file: %s (%s).", sequences_file, strerror(errno));
         exit(1);
     }
 
-    DEBUG_CLOCK_STOP("File read.")
+    CLOCK_STOP()
+    CLOCK_REPORT("File read")
 
     int max_distance;
     option_t* opt_max_distance = get_option(options, 'e');
     if (opt_max_distance->parsed) {
         max_distance = opt_max_distance->value.int_val;
+        if (max_distance <= 0) {
+            LOG_ERROR("Maximum error supported by the kernel must be > 0. Aborting.")
+            exit(-1);
+        }
     } else {
         // Assume error is about 10% between sequences, alignments that go
         // beyond this error will be offloaded to the CPU
@@ -330,7 +336,6 @@ int main(int argc, char** argv) {
     wfa_options.num_alignments = num_alignments;
     wfa_options.penalties = penalties;
 
-    CLOCK_INIT()
     CLOCK_START()
 
     launch_alignments_batched(
