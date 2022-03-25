@@ -146,7 +146,7 @@ bool check_affine_distance (const char* text,
 }
 
 
-wfa_offset_t extend_wavefront (
+static wfa_offset_t extend_wavefront (
         const wfa_offset_t offset_val,
         const int curr_k,
         const char* const pattern,

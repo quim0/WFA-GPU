@@ -23,6 +23,7 @@
 #define SEQUENCES_H
 
 #include <stddef.h>
+#include <stdbool.h>
 
 typedef struct {
     size_t text_offset;

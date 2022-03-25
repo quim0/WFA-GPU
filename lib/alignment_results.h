@@ -24,6 +24,14 @@
 
 #include "wfa_types.h"
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdlib.h>
+
+typedef struct {
+    char* buffer;
+    size_t buffer_size;
+    size_t last_free_position;
+} wfa_cigar_t;
 
 typedef struct {
     bool finished;
@@ -31,5 +39,17 @@ typedef struct {
     wfa_backtrace_t backtrace;
     int num_bt_blocks;
 } alignment_result_t;
+
+typedef struct {
+    unsigned int error;
+    wfa_cigar_t cigar;
+} wfa_alignment_result_t;
+
+bool initialize_wfa_results (wfa_alignment_result_t** results,
+                             const size_t num_alignments,
+                             const size_t cigar_length);
+
+bool destroy_wfa_results (wfa_alignment_result_t* results,
+                             const size_t num_alignments);
 
 #endif

@@ -37,20 +37,18 @@ typedef struct
 } wfa_backtrace_t;
 
 typedef enum {
+    OP_NOOP = 0,
     OP_INS = 1,
     OP_SUB = 2,
     OP_DEL = 3
 } affine_op_t;
 
+static const char ops_ascii[4] = {'?', 'I', 'X', 'D'};
+
 typedef enum {
     GAP_OPEN = 1,
     GAP_EXTEND
 } gap_op_t;
-
-typedef struct {
-    int len;
-    char* buffer;
-} wfa_cigar_t;
 
 // Height * width
 #define BT_OFFLOADED_ELEMENTS(max_steps) \

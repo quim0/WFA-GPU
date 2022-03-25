@@ -5,7 +5,7 @@ NVCC=nvcc
 SRC_PATH=lib
 BUILD_PATH=build
 SRC_ALIGNER=tools/aligner.c utils/arg_handler.c utils/sequence_reader.c
-SRC_LIB=$(SRC_PATH)/kernels/sequence_alignment_kernel.cu $(SRC_PATH)/kernels/sequence_packing_kernel.cu $(wildcard $(SRC_PATH)/*.cu) utils/verification.c utils/device_query.cu
+SRC_LIB=$(SRC_PATH)/kernels/sequence_alignment_kernel.cu $(SRC_PATH)/kernels/sequence_packing_kernel.cu $(wildcard $(SRC_PATH)/*.cu) lib/alignment_results.c utils/cigar.c utils/verification.c utils/device_query.cu
 SRC_WFA_CPU=utils/wfa_cpu.c
 SRC_TEST=$(wildcard tests/test_*.cu)
 ARGS=-I . -Ilib/
@@ -16,7 +16,6 @@ NVCC_OPTIONS=-O3 -maxrregcount=64 -gencode arch=compute_$(COMPUTE),code=sm_$(SM)
 
 aligner: wfa-cpu wfa-gpu-so $(SRC_ALIGNER)
 	mkdir -p bin
-# Link static library, could be possible to link dynamic library too
 	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -Lexternal/WFA/lib/ -O3 -o bin/wfa.affine.gpu -lwfagpu -lwfa -lm
 	echo "!! Before running put `pwd`/build in LD_LIBRARY_PATH env variable."
 

@@ -320,12 +320,13 @@ int main(int argc, char** argv) {
         band = -1;
     }
 
-    alignment_result_t* results = (alignment_result_t*)calloc(num_alignments, sizeof(alignment_result_t));
-    uint32_t backtraces_offloaded_elements = BT_OFFLOADED_RESULT_ELEMENTS(max_distance);
-    wfa_backtrace_t* backtraces = (wfa_backtrace_t*)calloc(
-                                                    backtraces_offloaded_elements * num_alignments,
-                                                    sizeof(wfa_backtrace_t)
-                                                    );
+    wfa_alignment_result_t* results;
+    // TODO: Make this a parameter
+    const int cigar_len = 200;
+    if (!initialize_wfa_results(&results, num_alignments, cigar_len)) {
+        LOG_ERROR("Can not initialise CIGAR buffer.")
+        exit(-1);
+    }
 
     wfa_alignment_options_t wfa_options = {0};
     wfa_options.max_error = max_distance;
@@ -343,7 +344,6 @@ int main(int argc, char** argv) {
         sequence_reader.sequences_buffer_size,
         sequence_reader.sequences_metadata,
         results,
-        backtraces,
         wfa_options,
         check
     );
@@ -352,6 +352,19 @@ int main(int argc, char** argv) {
     printf("Alignment computed. Wall time: %.3fs (%.3f alignments per second)\n",
            CLOCK_SECONDS, num_alignments / CLOCK_SECONDS);
 
-    free(results);
-    free(backtraces);
+    // Write results to output file
+    char* output_file = "results";
+    FILE* output_fp = fopen(output_file, "w");
+    if (output_fp == NULL) {
+        LOG_ERROR("Could not open file %s", output_file);
+        exit(-1);
+    }
+
+    for (int i=0; i<num_alignments; i++) {
+        fprintf(output_fp, "%d\t%s\n", -results[i].error, results[i].cigar.buffer);
+    }
+
+    fclose(output_fp);
+
+    destroy_wfa_results(results, num_alignments);
 }

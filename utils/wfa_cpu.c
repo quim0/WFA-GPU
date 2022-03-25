@@ -19,15 +19,16 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include "lib/wfa_types.h"
-#include "lib/alignment_results.h"
-#include "utils/sequences.h"
+#include "utils/wfa_cpu.h"
+#include "utils/logger.h"
 #include "external/WFA/wavefront/wavefront_align.h"
+#include "external/WFA/alignment/cigar.h"
 
 // Compute multiple alignments reusing the aligner object
 int compute_alignments_cpu_threaded (const int batch_size,
                                       const int from,
                                       alignment_result_t* results,
+                                      wfa_alignment_result_t* alignment_results,
                                       const sequence_pair_t* sequences_metadata,
                                       const char* sequences_buffer,
                                       const int x, const int o, const int e,
@@ -52,8 +53,6 @@ int compute_alignments_cpu_threaded (const int batch_size,
     for (int i=0; i<batch_size; i++) {
         int real_i = i + from;
         if (!results[i].finished) {
-            alignments_computed_cpu++;
-
             size_t toffset = sequences_metadata[real_i].text_offset;
             size_t poffset = sequences_metadata[real_i].pattern_offset;
 
@@ -67,6 +66,16 @@ int compute_alignments_cpu_threaded (const int batch_size,
             const int score = wf_aligner->cigar.score;
 
             results[i].distance = -score;
+            alignment_results[real_i].error = -score;
+            uint32_t cigar_len = wf_aligner->cigar.end_offset - wf_aligner->cigar.begin_offset;
+            if (cigar_len <= alignment_results[real_i].cigar.buffer_size) {
+                alignment_results[real_i].cigar.buffer = realloc(alignment_results[real_i].cigar.buffer, cigar_len + 1);
+                if (alignment_results[real_i].cigar.buffer == NULL) {
+                    LOG_ERROR("Can not realloc CIGAR buffer")
+                    exit(-1);
+                }
+            }
+            cigar_sprint(alignment_results[real_i].cigar.buffer, &wf_aligner->cigar, true);
             alignments_computed_cpu++;
         }
     }

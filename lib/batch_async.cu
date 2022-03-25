@@ -27,6 +27,7 @@
 #include "utils/wf_clock.h"
 #include "utils/verification.cuh"
 #include "utils/wfa_cpu.h"
+#include "utils/cigar.h"
 
 size_t bytes_to_copy_unpacked (const int from,
                                const int to,
@@ -38,11 +39,10 @@ size_t bytes_to_copy_unpacked (const int from,
     return final_byte - initial_byte;
 }
 
-void launch_alignments_batched (const char* sequences_buffer,
+void launch_alignments_batched (char* sequences_buffer,
                         const size_t sequences_buffer_size,
                         sequence_pair_t* const sequences_metadata,
-                        alignment_result_t* results,
-                        wfa_backtrace_t* backtraces,
+                        wfa_alignment_result_t* const alignment_results,
                         wfa_alignment_options_t options,
                         bool check_correctness) {
     cudaDeviceSetCacheConfig(cudaFuncCachePreferShared);
@@ -65,6 +65,16 @@ void launch_alignments_batched (const char* sequences_buffer,
     cudaStreamCreate(&stream1);
     CUDA_CHECK_ERR
     cudaStreamCreate(&stream2);
+    CUDA_CHECK_ERR
+
+
+    alignment_result_t* results;
+    cudaMallocHost(&results, batch_size * sizeof(alignment_result_t));
+    uint32_t backtraces_offloaded_elements = BT_OFFLOADED_RESULT_ELEMENTS(max_distance);
+    wfa_backtrace_t* backtraces;
+    cudaMallocHost(&backtraces, backtraces_offloaded_elements * batch_size *
+                                                    sizeof(wfa_backtrace_t)
+                                                    );
     CUDA_CHECK_ERR
 
     // TODO: Now its assumed that all the sequences will have more or less the
@@ -190,7 +200,7 @@ void launch_alignments_batched (const char* sequences_buffer,
 
         // Make sure packing kernel have finished before sending the next
         // unpacked sequences to the device
-        //cudaStreamSynchronize(stream1);
+        cudaStreamSynchronize(stream2);
 
         // Align current batch
         launch_alignments_async(
@@ -218,6 +228,7 @@ void launch_alignments_batched (const char* sequences_buffer,
                     prev_curr_batch_size,
                     prev_from,
                     results,
+                    alignment_results,
                     sequences_metadata,
                     sequences_buffer,
                     penalties.x, penalties.o, penalties.e,
@@ -229,6 +240,31 @@ void launch_alignments_batched (const char* sequences_buffer,
                 LOG_INFO("(Batch %d) %d/%d alignemnts could not be computed on the"
                          " GPU and where offloaded to the CPU.",
                          batch-1, alignments_computed_cpu, prev_curr_batch_size)
+            }
+
+
+            #pragma omp parallel for schedule(dynamic)
+            for (int i=prev_from; i<=prev_to; i++) {
+                if (!results[i-prev_from].finished) continue;
+                CLOCK_INIT()
+                CLOCK_START()
+                size_t toffset = sequences_metadata[i].text_offset;
+                size_t poffset = sequences_metadata[i].pattern_offset;
+
+                char* text = &sequences_buffer[toffset];
+                char* pattern = &sequences_buffer[poffset];
+
+                size_t tlen = sequences_metadata[i].text_len;
+                size_t plen = sequences_metadata[i].pattern_len;
+
+                int distance = results[i-prev_from].distance;
+                alignment_results[i].error = distance;
+                recover_cigar_affine(text, pattern, tlen,
+                         plen, results[i-prev_from].backtrace,
+                         backtraces + backtraces_offloaded_elements*(i-prev_from),
+                         results[i - prev_from],
+                         &alignment_results[i].cigar);
+                CLOCK_STOP()
             }
 
             // Check correctness if asked
@@ -360,6 +396,7 @@ void launch_alignments_batched (const char* sequences_buffer,
             curr_batch_size,
             from,
             results,
+            alignment_results,
             sequences_metadata,
             sequences_buffer,
             penalties.x, penalties.o, penalties.e,
@@ -371,6 +408,31 @@ void launch_alignments_batched (const char* sequences_buffer,
         LOG_INFO("(Batch %d) %d/%d alignemnts could not be computed on the"
                  " GPU and where offloaded to the CPU.",
                  batch, alignments_computed_cpu, curr_batch_size)
+    }
+
+    // Expand CIGARS
+    #pragma omp parallel for schedule(dynamic)
+    for (int i=from; i<=to; i++) {
+        if (!results[i-from].finished) continue;
+        CLOCK_INIT()
+        CLOCK_START()
+        size_t toffset = sequences_metadata[i].text_offset;
+        size_t poffset = sequences_metadata[i].pattern_offset;
+
+        char* text = &sequences_buffer[toffset];
+        char* pattern = &sequences_buffer[poffset];
+
+        size_t tlen = sequences_metadata[i].text_len;
+        size_t plen = sequences_metadata[i].pattern_len;
+
+        int distance = results[i-from].distance;
+        alignment_results[i].error = distance;
+        recover_cigar_affine(text, pattern, tlen,
+                 plen, results[i-from].backtrace,
+                 backtraces + backtraces_offloaded_elements*(i-from),
+                 results[i - from],
+                 &alignment_results[i].cigar);
+        CLOCK_STOP()
     }
 
     // Check correctness if asked
@@ -443,4 +505,6 @@ void launch_alignments_batched (const char* sequences_buffer,
     cudaFree(results_d);
     cudaFree(bt_offloaded_d);
     cudaFree(wf_data_buffer);
+    cudaFreeHost(results);
+    cudaFreeHost(backtraces);
 }

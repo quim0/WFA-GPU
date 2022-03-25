@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 Quim Aguado
+ * Copyright (c) 2022 Quim Aguado
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -19,34 +19,35 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef WFA_CPU_H
-#define WFA_CPU_H
+#ifndef CIGAR_H
+#define CIGAR_H
 
-#include "utils/sequences.h"
-#include "lib/wfa_types.h"
-#include "lib/alignment_results.h"
+#include "wfa_types.h"
+#include "alignment_results.h"
+#include <stdlib.h>
+#include <stdbool.h>
+
+#define OPS_PER_BT_WORD 16
+
+#define EWAVEFRONT_V(k,offset) ((offset)-(k))
+#define EWAVEFRONT_H(k,offset) (offset)
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-int compute_alignments_cpu_threaded (const int batch_size,
-                                      const int from,
-                                      alignment_result_t* results,
-                                      wfa_alignment_result_t* alignment_results,
-                                      const sequence_pair_t* sequences_metadata,
-                                      const char* sequences_buffer,
-                                      const int x, const int o, const int e,
-                                      const bool adaptative);
+bool insert_ops (wfa_cigar_t* const cigar,
+                 const char op,
+                 const unsigned int rep);
 
-int compute_alignment_cpu (const char* const pattern, const char* const text,
-                           const size_t plen, const size_t tlen,
-                           const int x, const int o, const int e);
-
-
-void pprint_cigar_cpu (const char* const pattern, const char* const text,
-                           const size_t plen, const size_t tlen,
-                           const int x, const int o, const int e);
+void recover_cigar_affine (char* text,
+                           char* pattern,
+                           const size_t tlen,
+                           const size_t plen,
+                           wfa_backtrace_t final_backtrace,
+                           wfa_backtrace_t* offloaded_backtraces_array,
+                           alignment_result_t result,
+                           wfa_cigar_t *cigar);
 
 #ifdef __cplusplus
 } // extern C

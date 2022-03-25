@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 Quim Aguado
+ * Copyright (c) 2022 Quim Aguado
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -19,28 +19,37 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef BATCH_ASYNC_CUH
-#define BATCH_ASYNC_CUH
-
-#include "utils/sequences.h"
-#include "affine_penalties.h"
-#include "alignment_parameters.h"
 #include "alignment_results.h"
-#include "wfa_types.h"
 
-#if __cplusplus
-extern "C" {
-#endif
+bool initialize_wfa_results (wfa_alignment_result_t** results,
+                             const size_t num_alignments,
+                             const size_t cigar_length) {
+    if (results == NULL) return false;
 
-void launch_alignments_batched (char* sequences_buffer,
-                        const size_t sequences_buffer_size,
-                        sequence_pair_t* const sequences_metadata,
-                        wfa_alignment_result_t* const alignment_results,
-                        wfa_alignment_options_t options,
-                        bool check_correctness);
+    *results = calloc(num_alignments, sizeof(wfa_alignment_result_t));    
+    if (*results == NULL) {
+        return false;
+    }
 
-#if __cplusplus // end of extern "C"
+    for (int i=0; i<num_alignments; i++) {
+        wfa_alignment_result_t* curr_result = (*results) + i;
+        curr_result->cigar.buffer = calloc(cigar_length, 1);
+        if (curr_result->cigar.buffer == NULL) return false;
+        curr_result->cigar.buffer_size = cigar_length;
+    }
+    return true;
 }
-#endif
 
-#endif
+bool destroy_wfa_results (wfa_alignment_result_t* results,
+                             const size_t num_alignments) {
+    if (results == NULL) return false;
+
+    for (int i=0; i<num_alignments; i++) {
+        wfa_alignment_result_t* curr_result = results + i;
+        if (curr_result->cigar.buffer != NULL) free(curr_result->cigar.buffer);
+    }
+
+    free(results);
+    return true;
+}
+
