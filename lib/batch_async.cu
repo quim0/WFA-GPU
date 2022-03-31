@@ -246,8 +246,6 @@ void launch_alignments_batched (char* sequences_buffer,
             #pragma omp parallel for schedule(dynamic)
             for (int i=prev_from; i<=prev_to; i++) {
                 if (!results[i-prev_from].finished) continue;
-                CLOCK_INIT()
-                CLOCK_START()
                 size_t toffset = sequences_metadata[i].text_offset;
                 size_t poffset = sequences_metadata[i].pattern_offset;
 
@@ -264,7 +262,6 @@ void launch_alignments_batched (char* sequences_buffer,
                          backtraces + backtraces_offloaded_elements*(i-prev_from),
                          results[i - prev_from],
                          &alignment_results[i].cigar);
-                CLOCK_STOP()
             }
 
             // Check correctness if asked
@@ -298,6 +295,7 @@ void launch_alignments_batched (char* sequences_buffer,
                                                 plen, results[i-prev_from].backtrace,
                                                 backtraces + backtraces_offloaded_elements*(i-prev_from),
                                                 results[i-prev_from]);
+
 
                     bool correct_cigar = check_cigar_edit(text, pattern, tlen, plen, cigar);
                     bool correct_affine_d = check_affine_distance(text, pattern, tlen,
@@ -414,8 +412,6 @@ void launch_alignments_batched (char* sequences_buffer,
     #pragma omp parallel for schedule(dynamic)
     for (int i=from; i<=to; i++) {
         if (!results[i-from].finished) continue;
-        CLOCK_INIT()
-        CLOCK_START()
         size_t toffset = sequences_metadata[i].text_offset;
         size_t poffset = sequences_metadata[i].pattern_offset;
 
@@ -432,7 +428,6 @@ void launch_alignments_batched (char* sequences_buffer,
                  backtraces + backtraces_offloaded_elements*(i-from),
                  results[i - from],
                  &alignment_results[i].cigar);
-        CLOCK_STOP()
     }
 
     // Check correctness if asked
@@ -446,7 +441,6 @@ void launch_alignments_batched (char* sequences_buffer,
         CLOCK_START()
         #pragma omp parallel for reduction(+:avg_distance,correct,incorrect)
         for (int i=from; i<=to; i++) {
-            // TODO: Check also CPU distances ?
             if (!results[i-from].finished) {
                 correct++;
                 avg_distance += results[i-from].distance;
@@ -467,6 +461,7 @@ void launch_alignments_batched (char* sequences_buffer,
                                         plen, results[i-from].backtrace,
                                         backtraces + backtraces_offloaded_elements*(i-from),
                                         results[i-from]);
+
 
             bool correct_cigar = check_cigar_edit(text, pattern, tlen, plen, cigar);
             bool correct_affine_d = check_affine_distance(text, pattern, tlen,

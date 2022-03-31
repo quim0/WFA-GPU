@@ -39,7 +39,7 @@
 
 #define MAX(A, B) (((A) > (B)) ? (A) : (B))
 
-#define NUM_ARGUMENTS 9
+#define NUM_ARGUMENTS 12
 #define NUM_CATEGORIES 3
 
 typedef enum {
@@ -62,7 +62,7 @@ int main(int argc, char** argv) {
          .description = "File containing the sequences to align.",
          .category = CAT_IO,
          .short_arg = 'i',
-         .long_arg = "input",
+         .long_arg = "input-file",
          .required = true,
          .type = ARG_STR
          },
@@ -142,6 +142,33 @@ int main(int argc, char** argv) {
          .long_arg = "band",
          .required = false,
          .type = ARG_INT
+         },
+         // 9
+        {.name = "Output File",
+         .description = "File where alignment output is saved.",
+         .category = CAT_IO,
+         .short_arg = 'o',
+         .long_arg = "output-file",
+         .required = false,
+         .type = ARG_STR
+         },
+         // 10
+        {.name = "Print",
+         .description = "Print output to stderr",
+         .category = CAT_IO,
+         .short_arg = 'p',
+         .long_arg = "print-output",
+         .required = false,
+         .type = ARG_NO_VALUE
+         },
+         // 11
+        {.name = "Verbose output",
+         .description = "Add the query/target information on the output",
+         .category = CAT_IO,
+         .short_arg = 'O',
+         .long_arg = "output-verbose",
+         .required = false,
+         .type = ARG_NO_VALUE
          },
     };
 
@@ -322,7 +349,7 @@ int main(int argc, char** argv) {
 
     wfa_alignment_result_t* results;
     // TODO: Make this a parameter
-    const int cigar_len = 200;
+    const int cigar_len = max_distance * 5;
     if (!initialize_wfa_results(&results, num_alignments, cigar_len)) {
         LOG_ERROR("Can not initialise CIGAR buffer.")
         exit(-1);
@@ -352,19 +379,42 @@ int main(int argc, char** argv) {
     printf("Alignment computed. Wall time: %.3fs (%.3f alignments per second)\n",
            CLOCK_SECONDS, num_alignments / CLOCK_SECONDS);
 
-    // Write results to output file
-    char* output_file = "results";
-    FILE* output_fp = fopen(output_file, "w");
-    if (output_fp == NULL) {
-        LOG_ERROR("Could not open file %s", output_file);
-        exit(-1);
-    }
+    if (get_option(options, 'o')->parsed || get_option(options, 'p')->parsed) {
 
-    for (int i=0; i<num_alignments; i++) {
-        fprintf(output_fp, "%d\t%s\n", -results[i].error, results[i].cigar.buffer);
-    }
+        if (!get_option(options, 'p')->parsed) {
+            LOG_INFO("Writing output file...")
+        }
 
-    fclose(output_fp);
+        FILE* output_fp;
+        if (!get_option(options, 'p')->parsed) {
+            // Write results to output file
+            char* output_file = get_option(options, 'o')->value.str_val;
+            output_fp = fopen(output_file, "w");
+            if (output_fp == NULL) {
+                LOG_ERROR("Could not open file %s", output_file);
+                exit(-1);
+            }
+        } else {
+            output_fp = stderr;
+        }
+
+        bool verbose = get_option(options, 'O')->parsed;
+
+        for (int i=0; i<num_alignments; i++) {
+            size_t ppos = sequence_reader.sequences_metadata[i].pattern_offset;
+            size_t tpos = sequence_reader.sequences_metadata[i].text_offset;
+            char* pattern = &sequence_reader.sequences_buffer[ppos];
+            char* text = &sequence_reader.sequences_buffer[tpos];
+            if (verbose)
+                fprintf(output_fp, "%d\t%s\t%s\t%s\n", -results[i].error, results[i].cigar.buffer, pattern, text);
+            else
+                fprintf(output_fp, "%d\t%s\n", -results[i].error, results[i].cigar.buffer);
+        }
+
+        if (!get_option(options, 'p')->parsed)
+            fclose(output_fp);
+    }
 
     destroy_wfa_results(results, num_alignments);
+    destroy_reader(&sequence_reader);
 }

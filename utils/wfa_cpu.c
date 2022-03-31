@@ -68,7 +68,7 @@ int compute_alignments_cpu_threaded (const int batch_size,
             results[i].distance = -score;
             alignment_results[real_i].error = -score;
             uint32_t cigar_len = wf_aligner->cigar.end_offset - wf_aligner->cigar.begin_offset;
-            if (cigar_len <= alignment_results[real_i].cigar.buffer_size) {
+            if (cigar_len >= alignment_results[real_i].cigar.buffer_size) {
                 alignment_results[real_i].cigar.buffer = realloc(alignment_results[real_i].cigar.buffer, cigar_len + 1);
                 if (alignment_results[real_i].cigar.buffer == NULL) {
                     LOG_ERROR("Can not realloc CIGAR buffer")

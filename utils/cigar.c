@@ -114,6 +114,8 @@ void recover_cigar_affine (char* text,
     *(unsigned char*)(pattern + plen) = 0xff;
 
     int iterations = result.num_bt_blocks;
+    affine_op_t op, prev_op;
+    unsigned int rep = 0;
     while (iterations > 0) {
 
         wfa_backtrace_t* backtrace = &offloaded_backtraces_array[iterations - 1];
@@ -123,12 +125,8 @@ void recover_cigar_affine (char* text,
         // __builtin_clz(0) is undefined
         if (backtrace_val == 0) steps = 0;
 
-        unsigned int rep = 0;
-        affine_op_t op = (affine_op_t)((backtrace_val >> ((steps - 1) * 2)) & 3);
-        affine_op_t prev_op;
-
+        //op = (affine_op_t)((backtrace_val >> ((steps - 1) * 2)) & 3);
         for (int d=0; d<steps; d++) {
-            prev_op = op;
             op = (affine_op_t)((backtrace_val >> ((steps - d - 1) * 2)) & 3);
 
             if (op != prev_op && rep != 0) {
@@ -138,7 +136,7 @@ void recover_cigar_affine (char* text,
 
             if (!extending) {
                 wfa_offset_t acc = extend_wavefront(offset, k, pattern, plen, text, tlen);
-                if (acc > 0) {
+                if (acc > 0 && rep != 0) {
                     // flush rep
                     insert_ops(cigar, ops_ascii[prev_op], rep);
                     rep = 0;
@@ -173,7 +171,7 @@ void recover_cigar_affine (char* text,
                     offset++;
                     break;
             }
-
+            prev_op = op;
             rep++;
         }
 
@@ -185,7 +183,7 @@ void recover_cigar_affine (char* text,
         if (!extending) {
             // Last exension
             wfa_offset_t acc = extend_wavefront(offset, k, pattern, plen, text, tlen);
-            if (acc > 0) {
+            if (acc > 0 && rep != 0) {
                 // flush rep
                 insert_ops(cigar, ops_ascii[prev_op], rep);
                 rep = 0;
@@ -205,12 +203,6 @@ void recover_cigar_affine (char* text,
     // __builtin_clz(0) is undefined
     if (backtrace_val == 0) steps = 0;
 
-    affine_op_t op = (affine_op_t)((backtrace_val >> ((steps - 1) * 2)) & 3);
-    affine_op_t prev_op;
-    // TODO: rep should not be initialised again for more consistent output? (5X
-    // instead of 2X3X)
-    int rep = 0;
-
     for (int d=0; d<steps; d++) {
         prev_op = op;
         op = (affine_op_t)((backtrace_val >> ((steps - d - 1) * 2)) & 3);
@@ -222,7 +214,7 @@ void recover_cigar_affine (char* text,
 
         if (!extending) {
             wfa_offset_t acc = extend_wavefront(offset, k, pattern, plen, text, tlen);
-            if (acc > 0) {
+            if (acc > 0 && rep != 0) {
                 // flush rep
                 insert_ops(cigar, ops_ascii[prev_op], rep);
                 rep = 0;
@@ -266,9 +258,9 @@ void recover_cigar_affine (char* text,
     if (!extending) {
         // Last exension
         wfa_offset_t acc = extend_wavefront(offset, k, pattern, plen, text, tlen);
-        if (acc > 0) {
+        if (acc > 0 && rep != 0) {
             // flush rep
-            insert_ops(cigar, ops_ascii[prev_op], rep);
+            insert_ops(cigar, ops_ascii[op], rep);
             rep = 0;
         }
         insert_ops(cigar, 'M', acc);
