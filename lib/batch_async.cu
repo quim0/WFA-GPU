@@ -151,7 +151,7 @@ void launch_alignments_batched (char* sequences_buffer,
     // is allocated just once here and reused.
     wfa_backtrace_t* bt_offloaded_d;
     // TODO: max_distance = max_steps (?)
-    allocate_offloaded_bt_d(&bt_offloaded_d, max_distance, num_blocks, num_alignments);
+    allocate_offloaded_bt_d(&bt_offloaded_d, max_distance, num_blocks, batch_size);
 
     uint8_t* wf_data_buffer;
     allocate_wf_data_buffer_d(&wf_data_buffer, max_distance,
@@ -183,7 +183,7 @@ void launch_alignments_batched (char* sequences_buffer,
 
         // TODO: Needed (?)
         // Reset the memory regions for the alignment kernel
-        reset_offloaded_bt_d(bt_offloaded_d, max_distance, num_blocks, num_alignments, stream2);
+        reset_offloaded_bt_d(bt_offloaded_d, max_distance, num_blocks, batch_size, stream2);
         reset_wf_data_buffer_d(wf_data_buffer, max_distance,
                                   penalties, num_blocks, stream2);
 
