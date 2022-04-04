@@ -134,8 +134,8 @@ int main(int argc, char** argv) {
          .type = ARG_INT
          },
          // 8
-        {.name = "Band",
-         .description = "Wavefront band (highest and lower diagonal that will be computed)."
+        {.name = "Adaptative band",
+         .description = "Wavefront band (highest and lower diagonal that will be initially computed)."
                         " Use \"auto\" to use an automatically generated band according to other parameters.",
          .category = CAT_ALIGN,
          .short_arg = 'B',

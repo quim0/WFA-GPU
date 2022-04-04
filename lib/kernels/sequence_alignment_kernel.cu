@@ -28,7 +28,7 @@
 #define MAX(A, B) max((A), (B))
 #define MIN(A, B) min((A), (B))
 
-#define OFFSET_NULL -10000
+#define OFFSET_NULL -32000
 
 // At least one of the highest two bits is set
 //#define BT_WORD_FULL_CMP 0x40000000
@@ -164,6 +164,16 @@ __device__ void set_offset (wfa_wavefront_t* const wf,
     wf->offsets[is_global][k] = value;
 }
 
+__forceinline__
+__device__ int compute_distance_to_target (const wfa_offset_t offset,
+                                          const int k,
+                                          const int plen,
+                                          const int tlen) {
+    const wfa_offset_t left_v = plen - EWAVEFRONT_V(k, offset);
+    const wfa_offset_t left_h = tlen - EWAVEFRONT_H(k, offset);
+    return (offset >= 0) ? MAX(left_v,left_h) : -OFFSET_NULL;
+}
+
 __device__ void next_M (wfa_wavefront_t* M_wavefronts,
                         const int curr_wf,
                         const int active_working_set_size,
@@ -175,12 +185,14 @@ __device__ void next_M (wfa_wavefront_t* M_wavefronts,
                         const size_t half_num_sh_offsets_per_wf,
                         unsigned int* const last_free_bt_position,
                         wfa_backtrace_t* const offloaded_backtraces,
-                        const int band) {
+                        int* band_hi,
+                        int* band_lo,
+                        const int d) {
     // The wavefront do not grow in case of mismatch
     const wfa_wavefront_t* prev_wf = &M_wavefronts[(curr_wf + x) % active_working_set_size];
 
-    const int hi = MIN(prev_wf->hi, band);
-    const int lo = MAX(prev_wf->lo, -band);
+    const int hi = MIN(prev_wf->hi, *band_hi);
+    const int lo = MAX(prev_wf->lo, *band_lo);
 
     for (int k=lo + threadIdx.x; k <= hi; k+=blockDim.x) {
         wfa_offset_t curr_offset = get_offset(prev_wf, k, half_num_sh_offsets_per_wf) + 1;
@@ -210,10 +222,38 @@ __device__ void next_M (wfa_wavefront_t* M_wavefronts,
         M_wavefronts[curr_wf].backtraces_pointers[k] = prev_bt_pointer;
     }
 
+    // Needed for the band, TODO: Do only one sync (now one is done here,
+    // another on the main while loop)
+    __syncthreads();
+
     if (threadIdx.x == 0) {
         M_wavefronts[curr_wf].hi = hi;
         M_wavefronts[curr_wf].lo = lo;
         M_wavefronts[curr_wf].exist= true;
+
+#if 0
+        // Update band
+        if (hi >= *band_hi && lo <= *band_lo && (d % 10 == 0)) {
+            const int quarter = (hi - lo) / 4;
+            const wfa_offset_t hi_candidate = get_offset(
+                    &M_wavefronts[curr_wf],
+                    hi - quarter,
+                    half_num_sh_offsets_per_wf
+                    );
+            const wfa_offset_t lo_candidate = get_offset(
+                    &M_wavefronts[curr_wf],
+                    lo + quarter,
+                    half_num_sh_offsets_per_wf
+                    );
+            if (lo_candidate < hi_candidate) {
+                (*band_hi)++;
+                (*band_lo)++;
+            } else {
+                (*band_hi)--;
+                (*band_lo)--;
+            }
+        }
+#endif
     }
 }
 
@@ -232,16 +272,18 @@ __device__ void next_MDI (wfa_wavefront_t* M_wavefronts,
                           const size_t half_num_sh_offsets_per_wf,
                           unsigned int* const last_free_bt_position,
                           wfa_backtrace_t* const offloaded_backtraces,
-                          const int band) {
+                          int* band_hi,
+                          int* band_lo,
+                          const int d) {
     wfa_wavefront_t* const prev_wf_x  = &M_wavefronts[(curr_wf + x) % active_working_set_size];
     wfa_wavefront_t* const prev_wf_o  = &M_wavefronts[(curr_wf + o + e) % active_working_set_size];
     wfa_wavefront_t* const prev_I_wf_e = &I_wavefronts[(curr_wf + e) % active_working_set_size];
     wfa_wavefront_t* const prev_D_wf_e = &D_wavefronts[(curr_wf + e) % active_working_set_size];
 
-    const int hi_ID = MIN(MAX(prev_wf_o->hi, MAX(prev_I_wf_e->hi, prev_D_wf_e->hi)) + 1, band);
-    const int hi    = MIN(MAX(prev_wf_x->hi, hi_ID), band);
-    const int lo_ID = MAX(MIN(prev_wf_o->lo, MIN(prev_I_wf_e->lo, prev_D_wf_e->lo)) - 1, -band);
-    const int lo    = MAX(MIN(prev_wf_x->lo, lo_ID), -band);
+    const int hi_ID = MIN(MAX(prev_wf_o->hi, MAX(prev_I_wf_e->hi, prev_D_wf_e->hi)) + 1, *band_hi);
+    const int hi    = MIN(MAX(prev_wf_x->hi, hi_ID), *band_hi);
+    const int lo_ID = MAX(MIN(prev_wf_o->lo, MIN(prev_I_wf_e->lo, prev_D_wf_e->lo)) - 1, *band_lo);
+    const int lo    = MAX(MIN(prev_wf_x->lo, lo_ID), *band_lo);
 
     for (int k=lo + threadIdx.x; k <= hi; k+=blockDim.x) {
         // ~I offsets
@@ -411,6 +453,10 @@ __device__ void next_MDI (wfa_wavefront_t* M_wavefronts,
         M_wavefronts[curr_wf].backtraces_pointers[k] = M_backtrace_pointer;
     }
 
+    // Needed for the band, TODO: Do only one sync (now one is done here,
+    // another on the main while loop)
+    __syncthreads();
+
     if (threadIdx.x == 0) {
         M_wavefronts[curr_wf].hi = hi;
         M_wavefronts[curr_wf].lo = lo;
@@ -423,6 +469,38 @@ __device__ void next_MDI (wfa_wavefront_t* M_wavefronts,
         D_wavefronts[curr_wf].hi = hi_ID;
         D_wavefronts[curr_wf].lo = lo_ID;
         D_wavefronts[curr_wf].exist = true;
+
+        // Update band
+        if (hi >= *band_hi && lo <= *band_lo && (d % 10 == 0)) {
+            const int quarter = (hi - lo) / 4;
+            const wfa_offset_t hi_offset = get_offset(
+                    &M_wavefronts[curr_wf],
+                    hi - quarter,
+                    half_num_sh_offsets_per_wf
+                    );
+            const wfa_offset_t lo_offset = get_offset(
+                    &M_wavefronts[curr_wf],
+                    lo + quarter,
+                    half_num_sh_offsets_per_wf
+                    );
+
+            const int hi_distance = compute_distance_to_target(hi_offset,
+                                                               hi - quarter,
+                                                               plen,
+                                                               tlen);
+            const int lo_distance = compute_distance_to_target(lo_offset,
+                                                               lo + quarter,
+                                                               plen,
+                                                               tlen);
+
+            if (lo_distance > hi_distance) {
+                (*band_hi)++;
+                (*band_lo)++;
+            } else {
+                (*band_hi)--;
+                (*band_lo)--;
+            }
+        }
     }
 }
 
@@ -482,10 +560,18 @@ __global__ void alignment_kernel (
     const int o = penalties.o;
     const int e = penalties.e;
 
+    // For adaptative band
+    __shared__ int band_hi, band_lo;
+
     __shared__ uint32_t alignment_idx;
 
     // Get the first alignment to compute from the alignments pool
-    if (tid == 0) alignment_idx = get_alignment_idx(next_alignment_idx);
+    // Initialise band
+    if (tid == 0) {
+        alignment_idx = get_alignment_idx(next_alignment_idx);
+        band_hi = band;
+        band_lo = -band;
+    }
 
     __syncthreads();
 
@@ -722,7 +808,8 @@ __global__ void alignment_kernel (
                     if (M_exist && !GAP_exist) {
                         next_M(M_wavefronts, curr_wf, active_working_set_size, x,
                                text, pattern, tlen, plen, num_sh_offsets_per_wf/2,
-                               last_free_bt_position, offloaded_backtraces, band);
+                               last_free_bt_position, offloaded_backtraces,
+                               &band_hi, &band_lo, distance);
                         D_wavefronts[curr_wf].exist = false;
                         I_wavefronts[curr_wf].exist = false;
                     } else {
@@ -731,7 +818,8 @@ __global__ void alignment_kernel (
                             curr_wf, active_working_set_size,
                             x, o, e,
                             text, pattern, tlen, plen, num_sh_offsets_per_wf/2,
-                            last_free_bt_position, offloaded_backtraces, band);
+                            last_free_bt_position, offloaded_backtraces,
+                            &band_hi, &band_lo, distance);
 
                         // Wavefront only grows if there's an operation in the ~I or
                         // ~D matrices
