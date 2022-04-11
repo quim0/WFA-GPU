@@ -221,8 +221,8 @@ void launch_alignments_batched (char* sequences_buffer,
         );
 
 
-        // Compute previous batch alignments that need to be offloaded to
-        // CPU, while the current batch alignments are computed.
+        // Compute previous batch alignments that need to be offloaded to CPU
+        // and expand CIGARS, while the current batch alignments are computed.
         if (batch > 0) {
             int alignments_computed_cpu = compute_alignments_cpu_threaded(
                     prev_curr_batch_size,
@@ -231,6 +231,8 @@ void launch_alignments_batched (char* sequences_buffer,
                     alignment_results,
                     sequences_metadata,
                     sequences_buffer,
+                    backtraces,
+                    backtraces_offloaded_elements,
                     penalties.x, penalties.o, penalties.e,
                     // Use heuristic WFA-CPU if banded WFA-GPU is being used
                     (band > 0)
@@ -240,28 +242,6 @@ void launch_alignments_batched (char* sequences_buffer,
                 LOG_INFO("(Batch %d) %d/%d alignemnts could not be computed on the"
                          " GPU and where offloaded to the CPU.",
                          batch-1, alignments_computed_cpu, prev_curr_batch_size)
-            }
-
-
-            #pragma omp parallel for schedule(dynamic)
-            for (int i=prev_from; i<=prev_to; i++) {
-                if (!results[i-prev_from].finished) continue;
-                size_t toffset = sequences_metadata[i].text_offset;
-                size_t poffset = sequences_metadata[i].pattern_offset;
-
-                char* text = &sequences_buffer[toffset];
-                char* pattern = &sequences_buffer[poffset];
-
-                size_t tlen = sequences_metadata[i].text_len;
-                size_t plen = sequences_metadata[i].pattern_len;
-
-                int distance = results[i-prev_from].distance;
-                alignment_results[i].error = distance;
-                recover_cigar_affine(text, pattern, tlen,
-                         plen, results[i-prev_from].backtrace,
-                         backtraces + backtraces_offloaded_elements*(i-prev_from),
-                         results[i - prev_from],
-                         &alignment_results[i].cigar);
             }
 
             // Check correctness if asked
@@ -389,7 +369,8 @@ void launch_alignments_batched (char* sequences_buffer,
         LOG_DEBUG("Batch %d/%d computed", batch+1, num_batchs);
     }
 
-    // Compute alignments of the last batch that need to be computed on CPU
+    // Compute alignments and expand CIGARS of the last batch that need to be
+    // computed on CPU
     int alignments_computed_cpu = compute_alignments_cpu_threaded(
             curr_batch_size,
             from,
@@ -397,6 +378,8 @@ void launch_alignments_batched (char* sequences_buffer,
             alignment_results,
             sequences_metadata,
             sequences_buffer,
+            backtraces,
+            backtraces_offloaded_elements,
             penalties.x, penalties.o, penalties.e,
             // Use heuristic WFA-CPU if banded WFA-GPU is being used
             (band > 0)
@@ -406,28 +389,6 @@ void launch_alignments_batched (char* sequences_buffer,
         LOG_INFO("(Batch %d) %d/%d alignemnts could not be computed on the"
                  " GPU and where offloaded to the CPU.",
                  batch, alignments_computed_cpu, curr_batch_size)
-    }
-
-    // Expand CIGARS
-    #pragma omp parallel for schedule(dynamic)
-    for (int i=from; i<=to; i++) {
-        if (!results[i-from].finished) continue;
-        size_t toffset = sequences_metadata[i].text_offset;
-        size_t poffset = sequences_metadata[i].pattern_offset;
-
-        char* text = &sequences_buffer[toffset];
-        char* pattern = &sequences_buffer[poffset];
-
-        size_t tlen = sequences_metadata[i].text_len;
-        size_t plen = sequences_metadata[i].pattern_len;
-
-        int distance = results[i-from].distance;
-        alignment_results[i].error = distance;
-        recover_cigar_affine(text, pattern, tlen,
-                 plen, results[i-from].backtrace,
-                 backtraces + backtraces_offloaded_elements*(i-from),
-                 results[i - from],
-                 &alignment_results[i].cigar);
     }
 
     // Check correctness if asked

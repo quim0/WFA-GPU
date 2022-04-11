@@ -21,6 +21,7 @@
 
 #include "utils/wfa_cpu.h"
 #include "utils/logger.h"
+#include "utils/cigar.h"
 #include "external/WFA/wavefront/wavefront_align.h"
 #include "external/WFA/alignment/cigar.h"
 
@@ -30,7 +31,9 @@ int compute_alignments_cpu_threaded (const int batch_size,
                                       alignment_result_t* results,
                                       wfa_alignment_result_t* alignment_results,
                                       const sequence_pair_t* sequences_metadata,
-                                      const char* sequences_buffer,
+                                      char* sequences_buffer,
+                                      wfa_backtrace_t* backtraces,
+                                      uint32_t backtraces_offloaded_elements,
                                       const int x, const int o, const int e,
                                       const bool adaptative) {
     wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
@@ -49,7 +52,7 @@ int compute_alignments_cpu_threaded (const int batch_size,
     {
     // Each thread reuse the aligner
     wavefront_aligner_t* const wf_aligner = wavefront_aligner_new(&attributes);
-    #pragma omp for schedule(dynamic)
+    #pragma omp for schedule(static)
     for (int i=0; i<batch_size; i++) {
         int real_i = i + from;
         if (!results[i].finished) {
@@ -80,6 +83,28 @@ int compute_alignments_cpu_threaded (const int batch_size,
         }
     }
     wavefront_aligner_delete(wf_aligner);
+
+    #pragma omp for schedule(static)
+    for (int i=from; i<=from+batch_size; i++) {
+        if (!results[i-from].finished) continue;
+        size_t toffset = sequences_metadata[i].text_offset;
+        size_t poffset = sequences_metadata[i].pattern_offset;
+
+        char* text = &sequences_buffer[toffset];
+        char* pattern = &sequences_buffer[poffset];
+
+        size_t tlen = sequences_metadata[i].text_len;
+        size_t plen = sequences_metadata[i].pattern_len;
+
+        int distance = results[i-from].distance;
+        alignment_results[i].error = distance;
+        recover_cigar_affine(text, pattern, tlen,
+                 plen, results[i-from].backtrace,
+                 backtraces + backtraces_offloaded_elements*(i-from),
+                 results[i - from],
+                 &alignment_results[i].cigar);
+    }
+
     } // end of parallel region
     return alignments_computed_cpu;
 }

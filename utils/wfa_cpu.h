@@ -35,7 +35,9 @@ int compute_alignments_cpu_threaded (const int batch_size,
                                       alignment_result_t* results,
                                       wfa_alignment_result_t* alignment_results,
                                       const sequence_pair_t* sequences_metadata,
-                                      const char* sequences_buffer,
+                                      char* sequences_buffer,
+                                      wfa_backtrace_t* backtraces,
+                                      uint32_t backtraces_offloaded_elements,
                                       const int x, const int o, const int e,
                                       const bool adaptative);
 
