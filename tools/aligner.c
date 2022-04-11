@@ -272,14 +272,12 @@ int main(int argc, char** argv) {
         // If it is not provided by the user, use the maximum distance as a
         // hint.
         const size_t max_wf_size = 2 * max_distance + 1;
-        if (max_wf_size <= 96)       threads_per_block = 64;
-        else if (max_wf_size <= 192) threads_per_block = 128;
-        else if (max_wf_size <= 380) threads_per_block = 256;
-        else if (max_wf_size <= 768) threads_per_block = 512;
+        if (max_wf_size <= 128)       threads_per_block = 64;
+        else if (max_wf_size <= 256) threads_per_block = 128;
+        else if (max_wf_size <= 512) threads_per_block = 256;
+        else if (max_wf_size <= 1024) threads_per_block = 512;
         else                         threads_per_block = 1024;
     }
-
-    LOG_INFO("Using %d threads per worker.", threads_per_block)
 
     size_t num_alignments = sequence_reader.num_sequences_read / 2;
 
@@ -328,8 +326,14 @@ int main(int argc, char** argv) {
             exit(-1);
         }
         if (band == 0) {
-            // Automatic band = number of threads to maximise utilisation
-            band = threads_per_block / 2 - 1;
+            // Automatic band = two iterations on the maximum distance
+            band = threads_per_block - 1;
+            if ((band+1) >= max_distance) {
+                LOG_INFO("Band too big, adjusting from %d to %d.", band, band/2)
+                band = band / 2;
+                // Also adjust threads per block, minimum 64 threads per block
+                threads_per_block /= (threads_per_block <= 128) ? 1 : 2;
+            }
 
         }
         if ((2 * band + 1) < (threads_per_block-1)) {
@@ -346,6 +350,8 @@ int main(int argc, char** argv) {
     } else {
         band = -1;
     }
+
+    LOG_INFO("Using %d threads per worker.", threads_per_block)
 
     wfa_alignment_result_t* results;
     // TODO: Make this a parameter
