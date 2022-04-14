@@ -16,10 +16,6 @@ $ ./build.sh
 
 The `build.sh` script notifies if there is any missing necessary software for compiling the library and the tools.
 
-## Using WFA-GPU in your project
-
-TODO
-
 ## Tools
 
 WFA-GPU comes with a tool to test its functionality, it is compiled (with the instruction on section "Build") to the `bin/wfa.affine.gpu` binary.
@@ -27,13 +23,16 @@ Running the binary without any arguments lists the help menu:
 
 ```
 [Input/Output]
-	-i, --input                         (string, required) Input sequences file: File containing the sequences to align.
+	-i, --input-file                    (string, required) Input sequences file: File containing the sequences to align.
 	-n, --num-alignments                (int) Number of alignments: Number of alignments to read from the file (default=all alignments)
+	-o, --output-file                   (string) Output File: File where alignment output is saved.
+	-p, --print-output                  Print: Print output to stderr
+	-O, --output-verbose                Verbose output: Add the query/target information on the output
 [Alignment Options]
 	-g, --affine-penalties              (string, required) Affine penalties: Gap-affine penalties for the alignment, in format x,o,e
-	-e, --max-distance                  (int) Maximum error allowed: Maximum error that the kernel will be able to compute (default = maximum possible error of first alignment)
+	-e, --max-distance                  (int) Maximum error allowed: Maximum error that the kernel will be able to compute (default = assume 10% error on the first sequence pair)
 	-b, --batch-size                    (int) Batch size: Number of alignments per batch.
-	-B, --band                          (int) Band: Wavefront band (highest and lower diagonal that will be computed).
+	-B, --band                          (int) Adaptative band: Wavefront band (highest and lower diagonal that will be initially computed). Use "auto" to use an automatically generated band according to other parameters.
 [System]
 	-c, --check                         Check: Check for alignment correctness
 	-t, --threads-per-block             (int) Number of CUDA threads per alginment: Number of CUDA threads per block, each block computes one or multiple alignment
@@ -47,11 +46,7 @@ possible (`-e` parameter), this contrains the memory used per alignment, and hel
 For big alignments, setting a band (i.e. limiting the maximum and minimum diagonal of the wavefronts) with the `-B` argument can give significant
 speedups, at the expense of potentially loosing some accuracy in corner cases.
 
-## Examples
-
-TODO
-
-## Possible errors
+## Troubleshooting
 
 #### cudaErrorLaunchTimeout
 
