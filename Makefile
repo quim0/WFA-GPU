@@ -16,8 +16,7 @@ NVCC_OPTIONS=-O3 -maxrregcount=64 -gencode arch=compute_$(COMPUTE),code=sm_$(SM)
 
 aligner: wfa-cpu wfa-gpu-so $(SRC_ALIGNER)
 	mkdir -p bin
-	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -Lexternal/WFA/lib/ -O3 -o bin/wfa.affine.gpu -lwfagpu -lwfa -lm
-	echo "!! Before running put `pwd`/build in LD_LIBRARY_PATH env variable."
+	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -Lexternal/WFA/lib/ -O3 -o bin/wfa.affine.gpu -lwfagpu -lwfa -lm -Wl,-rpath=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))/build/
 
 aligner-debug: wfa-cpu wfa-gpu-debug-so $(SRC_ALIGNER)
 	mkdir -p bin
