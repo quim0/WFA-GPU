@@ -39,7 +39,7 @@ size_t bytes_to_copy_unpacked (const int from,
     return final_byte - initial_byte;
 }
 
-void launch_alignments_batched (char* sequences_buffer,
+void launch_alignments (char* sequences_buffer,
                         const size_t sequences_buffer_size,
                         sequence_pair_t* const sequences_metadata,
                         wfa_alignment_result_t* const alignment_results,

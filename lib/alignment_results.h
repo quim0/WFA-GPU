@@ -45,11 +45,19 @@ typedef struct {
     wfa_cigar_t cigar;
 } wfa_alignment_result_t;
 
+#ifdef __cplusplus
+extern "C"{
+#endif
+
 bool initialize_wfa_results (wfa_alignment_result_t** results,
                              const size_t num_alignments,
                              const size_t cigar_length);
 
 bool destroy_wfa_results (wfa_alignment_result_t* results,
                              const size_t num_alignments);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

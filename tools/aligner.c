@@ -25,11 +25,7 @@
 #include "utils/sequence_reader.h"
 #include "utils/verification.h"
 #include "utils/device_query.cuh"
-#include "affine_penalties.h"
-#include "alignment_results.h"
-#include "wfa_types.h"
-#include "alignment_parameters.h"
-#include "batch_async.cuh"
+#include "include/wfa_gpu.h"
 
 #include <stdbool.h>
 #include <stdlib.h>
@@ -372,7 +368,7 @@ int main(int argc, char** argv) {
 
     CLOCK_START()
 
-    launch_alignments_batched(
+    launch_alignments(
         sequence_reader.sequences_buffer,
         sequence_reader.sequences_buffer_size,
         sequence_reader.sequences_metadata,

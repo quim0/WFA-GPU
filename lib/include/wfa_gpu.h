@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 Quim Aguado
+ * Copyright (c) 2022 Quim Aguado
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -19,28 +19,12 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef BATCH_ASYNC_CUH
-#define BATCH_ASYNC_CUH
+#ifndef WFA_GPU_H
+#define WFA_GPU_H
 
-#include "utils/sequences.h"
 #include "affine_penalties.h"
-#include "alignment_parameters.h"
 #include "alignment_results.h"
-#include "wfa_types.h"
-
-#if __cplusplus
-extern "C" {
-#endif
-
-void launch_alignments (char* sequences_buffer,
-                        const size_t sequences_buffer_size,
-                        sequence_pair_t* const sequences_metadata,
-                        wfa_alignment_result_t* const alignment_results,
-                        wfa_alignment_options_t options,
-                        bool check_correctness);
-
-#if __cplusplus // end of extern "C"
-}
-#endif
+#include "alignment_parameters.h"
+#include "batch_async.cuh"
 
 #endif
