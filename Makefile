@@ -9,7 +9,7 @@ SRC_LIB=$(SRC_PATH)/kernels/sequence_alignment_kernel.cu $(SRC_PATH)/kernels/seq
 SRC_WFA_CPU=utils/wfa_cpu.c
 SRC_TEST=$(wildcard tests/test_*.cu)
 ARGS=-I . -Ilib/
-ARGS_ALIGNER=-Wall -Lbuild/ -L/usr/local/cuda/lib64 $(ARGS)
+ARGS_ALIGNER=-Wall -Wno-unused-function -Lbuild/ -L/usr/local/cuda/lib64 $(ARGS)
 ARGS_TESTS=-Lbuild/ -L/usr/local/cuda/lib64 $(ARGS)
 ARGS_WFA_CPU=-Lexternal/WFA/lib/ $(ARGS) -Iexternal/WFA/ -lwfa
 NVCC_OPTIONS=-O3 -maxrregcount=64 -gencode arch=compute_$(COMPUTE),code=sm_$(SM) -Xptxas -v -Xcompiler -fopenmp

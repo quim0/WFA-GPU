@@ -33,8 +33,6 @@
 #include <errno.h>
 #include <string.h>
 
-#define MAX(A, B) (((A) > (B)) ? (A) : (B))
-
 #define NUM_ARGUMENTS 12
 #define NUM_CATEGORIES 3
 
@@ -298,7 +296,6 @@ int main(int argc, char** argv) {
     if (opt_num_blocks->parsed) {
         num_blocks = opt_num_blocks->value.int_val;
     } else {
-        // TODO: Get this from num_threads and GPU capabilities
         const int num_sm = get_cuda_SM_count(0);
         const int warps_per_block = threads_per_block / 32;
         // Assume we can get an occupancy of 32 warps / block

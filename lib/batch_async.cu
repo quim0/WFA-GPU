@@ -138,6 +138,10 @@ void launch_alignments (char* sequences_buffer,
     size_t bytes_to_copy_seqs = bytes_to_copy_unpacked(0, batch_size - 1,
                                                        sequences_metadata);
     const char *initial_seq = &sequences_buffer[sequences_metadata[0].pattern_offset];
+    if ((initial_seq + bytes_to_copy_seqs - sequences_buffer) > sequences_buffer_size) {
+        LOG_ERROR("Reading out of sequences buffer. Aborting.");
+        return;
+    }
     cudaMemcpyAsync(d_seq_buffer_unpacked, initial_seq, bytes_to_copy_seqs,
                     cudaMemcpyHostToDevice, stream1);
     CUDA_CHECK_ERR
@@ -338,7 +342,12 @@ void launch_alignments (char* sequences_buffer,
                 LOG_ERROR("Sequences buffer is too small to fit the current batch. Aborting.");
                 break;
             }
+
             initial_seq = &sequences_buffer[sequences_metadata[next_from].pattern_offset];
+            if ((initial_seq + bytes_to_copy_seqs - sequences_buffer) > sequences_buffer_size) {
+                LOG_ERROR("Reading out of sequences buffer. Aborting.");
+                break;
+            }
             cudaMemcpyAsync(d_seq_buffer_unpacked, initial_seq, bytes_to_copy_seqs,
                             cudaMemcpyHostToDevice, stream1);
             CUDA_CHECK_ERR

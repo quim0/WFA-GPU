@@ -22,9 +22,12 @@
 #ifndef WFA_GPU_H
 #define WFA_GPU_H
 
+#include "utils/sequences.h"
 #include "affine_penalties.h"
 #include "alignment_results.h"
 #include "alignment_parameters.h"
 #include "batch_async.cuh"
+
+#define WFA_ALIGN_32_BITS(x) ((x) + (4 - ((x) % 4)))
 
 #endif
