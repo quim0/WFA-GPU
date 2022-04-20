@@ -7,10 +7,8 @@ BUILD_PATH=build
 SRC_ALIGNER=tools/aligner.c utils/arg_handler.c utils/sequence_reader.c
 SRC_LIB=$(SRC_PATH)/kernels/sequence_alignment_kernel.cu $(SRC_PATH)/kernels/sequence_packing_kernel.cu $(wildcard $(SRC_PATH)/*.cu) lib/alignment_results.c utils/cigar.c utils/verification.c utils/device_query.cu
 SRC_WFA_CPU=utils/wfa_cpu.c
-SRC_TEST=$(wildcard tests/test_*.cu)
 ARGS=-I . -Ilib/
 ARGS_ALIGNER=-Wall -Wno-unused-function -Lbuild/ -L/usr/local/cuda/lib64 $(ARGS)
-ARGS_TESTS=-Lbuild/ -L/usr/local/cuda/lib64 $(ARGS)
 ARGS_WFA_CPU=-Lexternal/WFA/lib/ $(ARGS) -Iexternal/WFA/ -lwfa
 NVCC_OPTIONS=-O3 -maxrregcount=64 -gencode arch=compute_$(COMPUTE),code=sm_$(SM) -Xptxas -v -Xcompiler -fopenmp
 
@@ -28,16 +26,6 @@ aligner-profile: wfa-cpu wfa-gpu-profile-so $(SRC_ALIGNER)
 
 run-tests:
 	for f in bin/test-*; do ./$$f; done
-
-tests: test-packing test-alignment
-	mkdir -p bin
-	mv $^ bin/
-
-test-packing: tests/test_packing_kernel.cu wfa-cpu wfa-gpu-so
-	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS_TESTS) utils/verification.c $< -lwfagpu $(ARGS_WFA_CPU) -o $@
-
-test-alignment: tests/test_alignment_kernel.cu wfa-cpu wfa-gpu-so
-	$(NVCC) $(NVCC_OPTIONS) -g -G $(ARGS_TESTS) $< utils/verification.c -lwfagpu $(ARGS_WFA_CPU) -o $@
 
 wfa-gpu-so: $(SRC_LIB)
 	mkdir -p build
