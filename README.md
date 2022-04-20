@@ -46,6 +46,10 @@ possible (`-e` parameter), this contrains the memory used per alignment, and hel
 For big alignments, setting a band (i.e. limiting the maximum and minimum diagonal of the wavefronts) with the `-B` argument can give significant
 speedups, at the expense of potentially loosing some accuracy in corner cases.
 
+## Examples
+
+Two examples are located into the `examples/` directory. `manual_example.c` shows how to set all the aligner parameter manually, while in `auto_example.c` there is code that gets all alignment parameters automatically. The files also show how to organize sequences to be able to launch multi-batch executions.
+
 ## Troubleshooting
 
 #### cudaErrorLaunchTimeout
@@ -65,3 +69,7 @@ Open an issue on Github or contact with the main developer: Quim Aguado-Puig (qu
 ## License
 
 WFA-GPU is distributed under the MIT licence.
+
+## Citation
+
+Quim Aguado-Puig, Santiago Marco-Sola, Juan Carlos Moure, Christos Matzoros, David Castells-Rufas, Antonio Espinosa, Miquel Moreto. WFA-GPU: Gap-affine pairwise alignment using GPUs. bioRxiv (2022). DOI [2022.04.18.488374](https://doi.org/10.1101/2022.04.18.488374)
