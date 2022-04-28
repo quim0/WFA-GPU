@@ -48,7 +48,7 @@ speedups, at the expense of potentially loosing some accuracy in corner cases.
 
 ## Examples
 
-Two examples are located into the `examples/` directory. `manual_example.c` shows how to set all the aligner parameter manually, while in `auto_example.c` there is code that gets all alignment parameters automatically. The files also show how to organize sequences to be able to launch multi-batch executions.
+Two examples are located into the `examples/` directory. `manual_example.c` shows how to set all the aligner parameter manually, while in `auto_example.c` there is code that gets all alignment parameters automatically.
 
 ## Troubleshooting
 
