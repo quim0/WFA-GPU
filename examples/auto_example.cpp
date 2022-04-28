@@ -19,9 +19,7 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
+#include <iostream>
 #include "include/wfa_gpu.h"
 
 int main() {
@@ -57,9 +55,9 @@ int main() {
 
     // Read the results
     for (int i=0; i<aligner.alignment_options.num_alignments; i++) {
-        printf("Alignment %d:\n", i);
-        printf("\tScore: %d\n", aligner.results[i].error);
-        printf("\tCIGAR: %s\n", aligner.results[i].cigar.buffer);
+        std::cout << "Alignment" << i << std::endl;
+        std::cout << "\tScore: " << aligner.results[i].error << std::endl;
+        std::cout << "\tCIGAR: " << aligner.results[i].cigar.buffer << std::endl;
     }
     // Free internal structures memory
     wfagpu_destroy_aligner(&aligner);
