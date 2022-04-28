@@ -77,7 +77,7 @@ static int get_num_workers (const int num_threads) {
     return num_sm * blocks_per_sm;
 }
 
-static void wfa_set_default_options (wfa_alignment_options_t* wfa_options,
+static void wfagpu_set_default_options (wfa_alignment_options_t* wfa_options,
                                      sequence_pair_t* sequences_metadata,
                                      affine_penalties_t penalties,
                                      size_t num_alignments) {
@@ -88,7 +88,7 @@ static void wfa_set_default_options (wfa_alignment_options_t* wfa_options,
     int num_threads = wfa_get_threads_per_alignment(wfa_options->max_error);
     wfa_options->threads_per_block = num_threads;
     wfa_options->num_workers = get_num_workers(num_threads);
-    wfa_options->band = 0;
+    wfa_options->band = BAND_NONE;
     wfa_options->num_alignments = num_alignments;
     if (num_alignments > 10)
         wfa_options->batch_size = num_alignments / 10;

@@ -19,14 +19,50 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef WFA_GPU_H
-#define WFA_GPU_H
+#ifndef ALIGNER_H
+#define ALIGNER_H
 
+#include <inttypes.h>
 #include "utils/sequences.h"
-#include "affine_penalties.h"
-#include "alignment_results.h"
 #include "alignment_parameters.h"
-#include "batch_async.cuh"
-#include "aligner.h"
+#include "alignment_results.h"
 
+#define WFA_ALIGN_32_BITS(x) ((x) + (4 - ((x) % 4)))
+
+typedef char wfagpu_seqbuf_t;
+
+typedef struct {
+    wfagpu_seqbuf_t* sequences_buffer;
+    size_t sequences_buffer_len;
+    sequence_pair_t* sequences_metadata;
+    size_t sequences_metadata_len;
+    size_t num_sequence_pairs;
+    wfa_alignment_result_t* results;
+    int64_t last_sequence_pair_idx;
+    wfa_alignment_options_t alignment_options;
+} wfagpu_aligner_t;
+
+#if __cplusplus
+extern "C" {
 #endif
+
+bool wfagpu_add_sequences (wfagpu_aligner_t* aligner,
+                    const char* query,
+                    const char* target);
+
+void wfagpu_initialize_aligner (wfagpu_aligner_t* aligner);
+
+void wfagpu_initialize_parameters (wfagpu_aligner_t* aligner,
+                                   affine_penalties_t penalties);
+
+void wfagpu_set_batch_size (wfagpu_aligner_t* aligner, size_t batch_size);
+
+void wfagpu_destroy_aligner (wfagpu_aligner_t* aligner);
+
+void wfagpu_align (wfagpu_aligner_t* aligner);
+
+#if __cplusplus // end of extern "C"
+}
+#endif
+
+#endif // ALIGNER_H
