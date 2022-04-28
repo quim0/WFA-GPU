@@ -16,6 +16,49 @@ $ ./build.sh
 
 The `build.sh` script notifies if there is any missing necessary software for compiling the library and the tools.
 
+## Using WFA-GPU in your project
+
+This is a simple example on how to use WFA-GPU on your projects, for extended examples, see the files in `examples/`.
+
+``` c
+#include "include/wfa_gpu.h"
+
+// ...
+
+// Create and initialize the aligner structure
+wfagpu_aligner_t aligner = {0};
+wfagpu_initialize_aligner(&aligner);
+
+// Add the sequences to align: wfagpu_add_sequences(&aligner, query, target)
+wfagpu_add_sequences(&aligner, "GAATA", "GATACA");
+wfagpu_add_sequences(&aligner, "CATTAATCTT", "CAGTAAT");
+// ... Add as many sequence pairs as you need
+
+// Initialize the alignment parameters (*after* the sequences have been
+// added)
+affine_penalties_t penalties = {.x = 2, .o = 3, .e = 1};
+wfagpu_initialize_parameters(&aligner, penalties);
+
+// Optionally set batch size (number of sequences aligned in parallel)
+wfagpu_set_batch_size(&aligner, 10);
+
+// Align all sequence pairs
+wfagpu_align(&aligner);
+
+// Get error (score) of first alignment
+aligner.results[0].error
+// Get ASCII CIGAR of first alignment (char*)
+aligner.results[0].cigar.buffer
+```
+
+To compile, use the following options, where `$WFAGPU_PATH` is the path of this respository.
+
+```
+gcc test_wfagpu.c -o test-wfagpu -I $WFAGPU_PATH/lib/ -I $WFAGPU_PATH -L $WFAGPU_PATH/build/ -L $WFAGPU_PATH/external/WFA/lib/ -lwfagpu -lwfa
+```
+
+Then, to execute the generated binary, the OS needs to be able to find the dynamic library `$WFAGPU_PATH/build/libwfagpu.so`. A fast and easy way of doing so is adding it into the `LD_LIBRAY_PATH` environment variable (`export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$WFAGPU_PATH/build/`).
+
 ## Tools
 
 WFA-GPU comes with a tool to test its functionality, it is compiled (with the instruction on section "Build") to the `bin/wfa.affine.gpu` binary.
@@ -35,7 +78,7 @@ Running the binary without any arguments lists the help menu:
 	-B, --band                          (int) Adaptative band: Wavefront band (highest and lower diagonal that will be initially computed). Use "auto" to use an automatically generated band according to other parameters.
 [System]
 	-c, --check                         Check: Check for alignment correctness
-	-t, --threads-per-block             (int) Number of CUDA threads per alginment: Number of CUDA threads per block, each block computes one or multiple alignment
+	-t, --threads-per-block             (int) Number of CUDA threads per alignment: Number of CUDA threads per block, each block computes one or multiple alignment
 	-w, --workers                       (int) GPU workers: Number of blocks ('workers') to be running on the GPU.
 ```
 
@@ -45,10 +88,6 @@ possible (`-e` parameter), this contrains the memory used per alignment, and hel
 
 For big alignments, setting a band (i.e. limiting the maximum and minimum diagonal of the wavefronts) with the `-B` argument can give significant
 speedups, at the expense of potentially loosing some accuracy in corner cases.
-
-## Examples
-
-Two examples are located into the `examples/` directory. `manual_example.c` shows how to set all the aligner parameter manually, while in `auto_example.c` there is code that gets all alignment parameters automatically.
 
 ## Troubleshooting
 
