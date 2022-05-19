@@ -26,10 +26,10 @@
 
 #define SET_TEST_NAME(name) const char* wfa_tests_test_name = name;
 
-#define TEST_OK fprintf(stderr, "\u001b[32mTEST %s OK (%s)\u001b[0m\n", wfa_tests_test_name, __FILE__);
+#define TEST_OK fprintf(stderr, "\033[32mTEST %s OK (%s)\033[0m\n", wfa_tests_test_name, __FILE__);
 
 #define TEST_FAIL(tfail_str) { \
-    fprintf(stderr, "\u001b[31mTEST %s FAILED: %s (%s:%d)\u001b[0m\n", \
+    fprintf(stderr, "\033[0;31mTEST %s FAILED: %s (%s:%d)\033[0m\n", \
                     wfa_tests_test_name, tfail_str, __FILE__, __LINE__); exit(-1); }
 
 #define TEST_ASSERT(cond) if (!(cond)) TEST_FAIL("Assertion failed.")
