@@ -1,12 +1,19 @@
 SM=80
 COMPUTE=$(SM)
 CC=gcc
+NVCC=nvcc
 WFAGPU_PATH=../
 
-tests: api-test
+tests: test-api test-packing
 
-api-test:
-	$(CC) test_api.c -o test-api -I $(WFAGPU_PATH)/lib/ -I $(WFAGPU_PATH) -L $(WFAGPU_PATH)/build/ -L $(WFAGPU_PATH)/external/WFA/lib/ -lwfagpu -lwfa
+test-api: test_api.c
+	$(CC) $< -o $@ -I $(WFAGPU_PATH)/lib/ -I $(WFAGPU_PATH) -L $(WFAGPU_PATH)/build/ -L $(WFAGPU_PATH)/external/WFA/lib/ -lwfagpu -lwfa
+
+test-packing: test_packing_kernel.cu
+	$(NVCC) -g -G -I../lib/ -I../ ../utils/verification.c $< -L/usr/local/cuda/lib64 -L $(WFAGPU_PATH)/build/ -L $(WFAGPU_PATH)/external/WFA/lib/ -lwfagpu -lwfa -o $@
 
 run-tests:
-	LD_LIBRARY_PATH=../build/ ./test-api
+	for f in ./test-*; do LD_LIBRARY_PATH=../build/ ./$$f; done
+
+clean:
+	rm test-*
