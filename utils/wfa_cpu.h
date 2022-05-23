@@ -41,6 +41,15 @@ int compute_alignments_cpu_threaded (const int batch_size,
                                       const int x, const int o, const int e,
                                       const bool adaptative);
 
+int compute_distance_cpu_threaded (const int batch_size,
+                                      const int from,
+                                      alignment_result_t* results,
+                                      wfa_alignment_result_t* alignment_results,
+                                      const sequence_pair_t* sequences_metadata,
+                                      char* sequences_buffer,
+                                      const int x, const int o, const int e,
+                                      const bool adaptative);
+
 int compute_alignment_cpu (const char* const pattern, const char* const text,
                            const size_t plen, const size_t tlen,
                            const int x, const int o, const int e);

@@ -33,6 +33,7 @@ typedef struct {
     size_t last_free_position;
 } wfa_cigar_t;
 
+// Internal structure (produced by the kernel)
 typedef struct {
     bool finished;
     int distance;
@@ -40,6 +41,7 @@ typedef struct {
     int num_bt_blocks;
 } alignment_result_t;
 
+// Public API structure
 typedef struct {
     unsigned int error;
     wfa_cigar_t cigar;

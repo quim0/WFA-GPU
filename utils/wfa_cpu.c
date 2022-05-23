@@ -109,6 +109,57 @@ int compute_alignments_cpu_threaded (const int batch_size,
     return alignments_computed_cpu;
 }
 
+// Compute multiple alignments reusing the aligner object
+int compute_distance_cpu_threaded (const int batch_size,
+                                      const int from,
+                                      alignment_result_t* results,
+                                      wfa_alignment_result_t* alignment_results,
+                                      const sequence_pair_t* sequences_metadata,
+                                      char* sequences_buffer,
+                                      const int x, const int o, const int e,
+                                      const bool adaptative) {
+    wavefront_aligner_attr_t attributes = wavefront_aligner_attr_default;
+
+    attributes.distance_metric = gap_affine;
+    attributes.affine_penalties.match = 0;
+    attributes.affine_penalties.mismatch = x;
+    attributes.affine_penalties.gap_opening = o;
+    attributes.affine_penalties.gap_extension = e;
+    attributes.memory_mode = wavefront_memory_low;
+    if (!adaptative) attributes.heuristic.strategy = wf_heuristic_none;
+
+    int alignments_computed_cpu = 0;
+
+    #pragma omp parallel reduction(+:alignments_computed_cpu)
+    {
+    // Each thread reuse the aligner
+    wavefront_aligner_t* const wf_aligner = wavefront_aligner_new(&attributes);
+    #pragma omp for schedule(static)
+    for (int i=0; i<batch_size; i++) {
+        int real_i = i + from;
+        if (!results[i].finished) {
+            size_t toffset = sequences_metadata[real_i].text_offset;
+            size_t poffset = sequences_metadata[real_i].pattern_offset;
+
+            const char* text = &sequences_buffer[toffset];
+            const char* pattern = &sequences_buffer[poffset];
+
+            size_t tlen = sequences_metadata[real_i].text_len;
+            size_t plen = sequences_metadata[real_i].pattern_len;
+
+            wavefront_align(wf_aligner, pattern, plen, text, tlen);
+            const int score = wf_aligner->cigar.score;
+
+            results[i].distance = -score;
+            alignment_results[real_i].error = -score;
+            alignments_computed_cpu++;
+        }
+    }
+    wavefront_aligner_delete(wf_aligner);
+    } // end of parallel region
+    return alignments_computed_cpu;
+}
+
 int compute_alignment_cpu (const char* const pattern, const char* const text,
                            const size_t plen, const size_t tlen,
                            const int x, const int o, const int e) {

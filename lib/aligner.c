@@ -21,7 +21,7 @@
 
 #include <string.h>
 #include "aligner.h"
-#include "batch_async.cuh"
+#include "align.cuh"
 #include "utils/logger.h"
 
 // 1MiB
@@ -165,12 +165,23 @@ void wfagpu_destroy_aligner (wfagpu_aligner_t* aligner) {
 }
 
 void wfagpu_align (wfagpu_aligner_t* aligner) {
-    launch_alignments(
-        aligner->sequences_buffer,
-        aligner->sequences_buffer_len,
-        aligner->sequences_metadata,
-        aligner->results,
-        aligner->alignment_options,
-        false // Check if results are correct
-    );
+    if (aligner->alignment_options.compute_cigar) {
+        launch_alignments(
+            aligner->sequences_buffer,
+            aligner->sequences_buffer_len,
+            aligner->sequences_metadata,
+            aligner->results,
+            aligner->alignment_options,
+            false // Check if results are correct
+        );
+    } else {
+        launch_alignments_distance(
+            aligner->sequences_buffer,
+            aligner->sequences_buffer_len,
+            aligner->sequences_metadata,
+            aligner->results,
+            aligner->alignment_options,
+            false // Check if results are correct
+        );
+    }
 }

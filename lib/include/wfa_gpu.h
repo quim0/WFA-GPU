@@ -26,7 +26,7 @@
 #include "affine_penalties.h"
 #include "alignment_results.h"
 #include "alignment_parameters.h"
-#include "batch_async.cuh"
+#include "align.cuh"
 #include "aligner.h"
 
 #endif

@@ -39,6 +39,13 @@ void launch_alignments (char* sequences_buffer,
                         wfa_alignment_options_t options,
                         bool check_correctness);
 
+void launch_alignments_distance (char* sequences_buffer,
+                                 const size_t sequences_buffer_size,
+                                 sequence_pair_t* const sequences_metadata,
+                                 wfa_alignment_result_t* const alignment_results,
+                                 wfa_alignment_options_t options,
+                                 bool check_correctness);
+
 #if __cplusplus // end of extern "C"
 }
 #endif

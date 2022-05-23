@@ -52,6 +52,9 @@ typedef struct {
     // Total number of alignments to compute.
     size_t num_alignments;
     affine_penalties_t penalties;
+    // If true, compute the optimal alignment path (CIGAR). If false just
+    // compute the alignment distance
+    bool compute_cigar;
 } wfa_alignment_options_t;
 
 static int wfa_get_threads_per_alignment (const size_t max_error) {
@@ -95,6 +98,7 @@ static void wfagpu_set_default_options (wfa_alignment_options_t* wfa_options,
     else
         wfa_options->batch_size = num_alignments;
     wfa_options->penalties = penalties;
+    wfa_options->compute_cigar = false;
 }
 
 #endif

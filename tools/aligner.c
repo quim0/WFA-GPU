@@ -33,7 +33,7 @@
 #include <errno.h>
 #include <string.h>
 
-#define NUM_ARGUMENTS 12
+#define NUM_ARGUMENTS 13
 #define NUM_CATEGORIES 3
 
 typedef enum {
@@ -51,7 +51,6 @@ const char* menu_categories[] = {
 int main(int argc, char** argv) {
 
     option_t options_arr[NUM_ARGUMENTS] = {
-        // 0
         {.name = "Input sequences file",
          .description = "File containing the sequences to align.",
          .category = CAT_IO,
@@ -60,7 +59,6 @@ int main(int argc, char** argv) {
          .required = true,
          .type = ARG_STR
          },
-        // 1
         {.name = "Number of alignments",
          .description = "Number of alignments to read from the file (default=all"
                         " alignments)",
@@ -70,7 +68,6 @@ int main(int argc, char** argv) {
          .required = false,
          .type = ARG_INT
          },
-        // 2
         {.name = "Affine penalties",
          .description = "Gap-affine penalties for the alignment, in format x,o,e",
          .category = CAT_ALIGN,
@@ -79,7 +76,14 @@ int main(int argc, char** argv) {
          .required = true,
          .type = ARG_STR
          },
-        // 3
+        {.name = "Compute CIGAR",
+         .description = "Compute the optimal alignment path (CIGAR) of all the alignments, otherwise, only the distance is computed.",
+         .category = CAT_ALIGN,
+         .short_arg = 'x',
+         .long_arg = "compute-cigar",
+         .required = false,
+         .type = ARG_NO_VALUE
+         },
         {.name = "Check",
          .description = "Check for alignment correctness",
          .category = CAT_SYS,
@@ -88,7 +92,6 @@ int main(int argc, char** argv) {
          .required = false,
          .type = ARG_NO_VALUE
          },
-        // 4
         {.name = "Maximum error allowed",
          .description = "Maximum error that the kernel will be able to "
                         "compute (default = maximum possible error of first "
@@ -99,7 +102,6 @@ int main(int argc, char** argv) {
          .required = false,
          .type = ARG_INT
          },
-        // 5
         {.name = "Number of CUDA threads per alginment",
          .description = "Number of CUDA threads per block, each block computes"
                         " one or multiple alignment",
@@ -109,7 +111,6 @@ int main(int argc, char** argv) {
          .required = false,
          .type = ARG_INT
          },
-         // 6
         {.name = "Batch size",
          .description = "Number of alignments per batch.",
          .category = CAT_ALIGN,
@@ -118,7 +119,6 @@ int main(int argc, char** argv) {
          .required = false,
          .type = ARG_INT
          },
-         // 7
         {.name = "GPU workers",
          .description = "Number of blocks ('workers') to be running on the GPU.",
          .category = CAT_SYS,
@@ -127,7 +127,6 @@ int main(int argc, char** argv) {
          .required = false,
          .type = ARG_INT
          },
-         // 8
         {.name = "Adaptative band",
          .description = "Wavefront band (highest and lower diagonal that will be initially computed)."
                         " Use \"auto\" to use an automatically generated band according to other parameters.",
@@ -137,7 +136,6 @@ int main(int argc, char** argv) {
          .required = false,
          .type = ARG_INT
          },
-         // 9
         {.name = "Output File",
          .description = "File where alignment output is saved.",
          .category = CAT_IO,
@@ -146,7 +144,6 @@ int main(int argc, char** argv) {
          .required = false,
          .type = ARG_STR
          },
-         // 10
         {.name = "Print",
          .description = "Print output to stderr",
          .category = CAT_IO,
@@ -155,7 +152,6 @@ int main(int argc, char** argv) {
          .required = false,
          .type = ARG_NO_VALUE
          },
-         // 11
         {.name = "Verbose output",
          .description = "Add the query/target information on the output",
          .category = CAT_IO,
@@ -363,18 +359,30 @@ int main(int argc, char** argv) {
     wfa_options.num_alignments = num_alignments;
     wfa_options.penalties = penalties;
 
+    bool compute_cigar = get_option(options, 'x')->parsed;
     CLOCK_START()
-
-    launch_alignments(
-        sequence_reader.sequences_buffer,
-        sequence_reader.sequences_buffer_size,
-        sequence_reader.sequences_metadata,
-        results,
-        wfa_options,
-        check
-    );
+    if (compute_cigar) {
+        launch_alignments(
+            sequence_reader.sequences_buffer,
+            sequence_reader.sequences_buffer_size,
+            sequence_reader.sequences_metadata,
+            results,
+            wfa_options,
+            check
+        );
+    } else {
+        launch_alignments_distance(
+            sequence_reader.sequences_buffer,
+            sequence_reader.sequences_buffer_size,
+            sequence_reader.sequences_metadata,
+            results,
+            wfa_options,
+            check
+        );
+    }
 
     CLOCK_STOP()
+
     printf("Alignment computed. Wall time: %.3fs (%.3f alignments per second)\n",
            CLOCK_SECONDS, num_alignments / CLOCK_SECONDS);
 
@@ -404,10 +412,13 @@ int main(int argc, char** argv) {
             size_t tpos = sequence_reader.sequences_metadata[i].text_offset;
             char* pattern = &sequence_reader.sequences_buffer[ppos];
             char* text = &sequence_reader.sequences_buffer[tpos];
+            char *cigar;
+            if (compute_cigar) cigar = results[i].cigar.buffer;
+            else cigar = "";
             if (verbose)
-                fprintf(output_fp, "%d\t%s\t%s\t%s\n", -results[i].error, results[i].cigar.buffer, pattern, text);
+                fprintf(output_fp, "%d\t%s\t%s\t%s\n", -results[i].error, cigar, pattern, text);
             else
-                fprintf(output_fp, "%d\t%s\n", -results[i].error, results[i].cigar.buffer);
+                fprintf(output_fp, "%d\t%s\n", -results[i].error, cigar);
         }
 
         if (!get_option(options, 'p')->parsed)

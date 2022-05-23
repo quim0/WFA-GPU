@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 Quim Aguado
+ * Copyright (c) 2022 Quim Aguado
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of
  * this software and associated documentation files (the "Software"), to deal in
@@ -19,8 +19,8 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef SEQUENCE_ALIGNMENT_CUH
-#define SEQUENCE_ALIGNMENT_CUH
+#ifndef SEQUENCE_DISTANCE_CUH
+#define SEQUENCE_DISTANCE_CUH
 
 #include <stdint.h>
 #include "wfa_types.h"
@@ -40,19 +40,15 @@ typedef struct {
     // offsets at global memory
     wfa_offset_t* offsets[2];
     bool exist;
-    bt_vector_t* backtraces_vectors;
-    bt_prev_t* backtraces_pointers;
-} wfa_wavefront_t;
+} wfa_distance_wavefront_t;
 
-__global__ void alignment_kernel (
+__global__ void distance_kernel (
                             const char* packed_sequences_buffer,
                             const sequence_pair_t* sequences_metadata,
                             const size_t num_alignments,
                             const int max_steps,
                             uint8_t* const wf_data_buffer,
                             const affine_penalties_t penalties,
-                            wfa_backtrace_t* offloaded_backtraces_global,
-                            wfa_backtrace_t* offloaded_backtraces_results,
                             alignment_result_t* results,
                             uint32_t* const next_alignment_idx,
                             const size_t num_sh_offsets_per_wf,
