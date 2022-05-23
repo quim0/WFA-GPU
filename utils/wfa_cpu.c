@@ -154,6 +154,8 @@ int compute_distance_cpu_threaded (const int batch_size,
             alignment_results[real_i].error = -score;
             alignments_computed_cpu++;
         }
+        const int distance = results[i].distance;
+        alignment_results[real_i].error = distance;
     }
     wavefront_aligner_delete(wf_aligner);
     } // end of parallel region
