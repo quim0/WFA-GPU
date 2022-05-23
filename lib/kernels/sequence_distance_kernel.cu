@@ -166,10 +166,9 @@ __device__ static void next_MDI (wfa_distance_wavefront_t* M_wavefronts,
         // ~M update
         const wfa_offset_t X_offset = get_offset(prev_wf_x, k, half_num_sh_offsets_per_wf) + 1;
 
-        const int64_t M_offset_pb = MAX(MAX((int64_t)X_offset, D_offset), I_offset);
+        wfa_offset_t M_offset = MAX(MAX((int64_t)X_offset, D_offset), I_offset);
 
         // Extend
-        wfa_offset_t M_offset = (wfa_offset_t)(M_offset_pb >> 32);
         if (M_offset >= 0) {
             M_offset = WF_extend_kernel(text, pattern, tlen, plen, k, M_offset);
         }
