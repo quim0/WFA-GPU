@@ -42,6 +42,10 @@ wfagpu_initialize_parameters(&aligner, penalties);
 // Optionally set batch size (number of sequences aligned in parallel)
 wfagpu_set_batch_size(&aligner, 10);
 
+// Compute the backtrace and generate the alignment CIGAR, if this is set
+// to false (default), only the affine distance is computed.
+aligner.alignment_options.compute_cigar = true;
+
 // Align all sequence pairs
 wfagpu_align(&aligner);
 
@@ -73,12 +77,13 @@ Running the binary without any arguments lists the help menu:
 	-O, --output-verbose                Verbose output: Add the query/target information on the output
 [Alignment Options]
 	-g, --affine-penalties              (string, required) Affine penalties: Gap-affine penalties for the alignment, in format x,o,e
-	-e, --max-distance                  (int) Maximum error allowed: Maximum error that the kernel will be able to compute (default = assume 10% error on the first sequence pair)
+	-x, --compute-cigar                 Compute CIGAR: Compute the optimal alignment path (CIGAR) of all the alignments, otherwise, only the distance is computed.
+	-e, --max-distance                  (int) Maximum error allowed: Maximum error that the kernel will be able to compute (default = maximum possible error of first alignment)
 	-b, --batch-size                    (int) Batch size: Number of alignments per batch.
 	-B, --band                          (int) Adaptative band: Wavefront band (highest and lower diagonal that will be initially computed). Use "auto" to use an automatically generated band according to other parameters.
 [System]
 	-c, --check                         Check: Check for alignment correctness
-	-t, --threads-per-block             (int) Number of CUDA threads per alignment: Number of CUDA threads per block, each block computes one or multiple alignment
+	-t, --threads-per-block             (int) Number of CUDA threads per alginment: Number of CUDA threads per block, each block computes one or multiple alignment
 	-w, --workers                       (int) GPU workers: Number of blocks ('workers') to be running on the GPU.
 ```
 
