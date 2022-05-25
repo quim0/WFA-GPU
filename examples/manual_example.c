@@ -81,6 +81,9 @@ int main() {
     // Otherwise, set the maximum diagonal that will be initially computed.
     aligner.alignment_options.band = BAND_NONE;
 
+    // Compute the optimal alignment path (CIGAR) or only the distance
+    aligner.alignment_options.compute_cigar = true;
+
     // Align all sequence pairs
     wfagpu_align(&aligner);
 

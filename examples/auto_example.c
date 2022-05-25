@@ -50,6 +50,9 @@ int main() {
     // batch size of 2 will execute two batches
     wfagpu_set_batch_size(&aligner, 2);
 
+    // Compute the optimal alignment path (CIGAR) or only the distance
+    aligner.alignment_options.compute_cigar = true;
+
     // Align all sequence pairs
     wfagpu_align(&aligner);
 
