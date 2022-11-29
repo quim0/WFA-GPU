@@ -30,6 +30,16 @@
 #define BT_WORD_FULL_CMP (1L << (wfa_backtrace_bits-2))
 #define BT_IS_FULL(bt_word) ((bt_word) >= BT_WORD_FULL_CMP)
 
+__device__ static void update_hi_lo (wfa_wavefront_t* wfs,
+                                const int active_working_set_size,
+                                const int hi,
+                                const int lo) {
+    for (int i=0; i<active_working_set_size; i++) {
+        if (wfs[i].hi > hi) wfs[i].hi = hi;
+        if (wfs[i].lo < lo) wfs[i].lo = lo;
+    }
+}
+
 __device__ static bt_prev_t offload_backtrace (unsigned int* const last_free_bt_position,
                                        const bt_vector_t backtrace_vector,
                                        const bt_prev_t backtrace_pointer,
@@ -88,14 +98,12 @@ __device__ static void next_M (wfa_wavefront_t* M_wavefronts,
                         const size_t half_num_sh_offsets_per_wf,
                         unsigned int* const last_free_bt_position,
                         wfa_backtrace_t* const offloaded_backtraces,
-                        int* band_hi,
-                        int* band_lo,
                         const int d) {
     // The wavefront do not grow in case of mismatch
     const wfa_wavefront_t* prev_wf = &M_wavefronts[(curr_wf + x) % active_working_set_size];
 
-    const int hi = MIN(prev_wf->hi, *band_hi);
-    const int lo = MAX(prev_wf->lo, *band_lo);
+    const int hi = prev_wf->hi;
+    const int lo = prev_wf->lo;
 
     for (int k=lo + threadIdx.x; k <= hi; k+=blockDim.x) {
         wfa_offset_t curr_offset = get_offset(prev_wf, k, half_num_sh_offsets_per_wf) + 1;
@@ -175,18 +183,17 @@ __device__ static void next_MDI (wfa_wavefront_t* M_wavefronts,
                           const size_t half_num_sh_offsets_per_wf,
                           unsigned int* const last_free_bt_position,
                           wfa_backtrace_t* const offloaded_backtraces,
-                          int* band_hi,
-                          int* band_lo,
+                          int band,
                           const int d) {
     wfa_wavefront_t* const prev_wf_x  = &M_wavefronts[(curr_wf + x) % active_working_set_size];
     wfa_wavefront_t* const prev_wf_o  = &M_wavefronts[(curr_wf + o + e) % active_working_set_size];
     wfa_wavefront_t* const prev_I_wf_e = &I_wavefronts[(curr_wf + e) % active_working_set_size];
     wfa_wavefront_t* const prev_D_wf_e = &D_wavefronts[(curr_wf + e) % active_working_set_size];
 
-    const int hi_ID = MIN(MAX(prev_wf_o->hi, MAX(prev_I_wf_e->hi, prev_D_wf_e->hi)) + 1, *band_hi);
-    const int hi    = MIN(MAX(prev_wf_x->hi, hi_ID), *band_hi);
-    const int lo_ID = MAX(MIN(prev_wf_o->lo, MIN(prev_I_wf_e->lo, prev_D_wf_e->lo)) - 1, *band_lo);
-    const int lo    = MAX(MIN(prev_wf_x->lo, lo_ID), *band_lo);
+    const int hi_ID = MAX(prev_wf_o->hi, MAX(prev_I_wf_e->hi, prev_D_wf_e->hi)) + 1;
+    const int hi    = MAX(prev_wf_x->hi, hi_ID);
+    const int lo_ID = MIN(prev_wf_o->lo, MIN(prev_I_wf_e->lo, prev_D_wf_e->lo)) - 1;
+    const int lo    = MIN(prev_wf_x->lo, lo_ID);
 
     for (int k=lo + threadIdx.x; k <= hi; k+=blockDim.x) {
         // ~I offsets
@@ -373,36 +380,28 @@ __device__ static void next_MDI (wfa_wavefront_t* M_wavefronts,
         D_wavefronts[curr_wf].lo = lo_ID;
         D_wavefronts[curr_wf].exist = true;
 
-        // Update band
-        if (hi >= *band_hi && lo <= *band_lo && (d % 10 == 0)) {
-            const int quarter = (hi - lo) / 4;
-            const wfa_offset_t hi_offset = get_offset(
+        if (band && (d % band) == 0) {
+            int bmind = 2 * (tlen + plen);
+            // start with current center
+            int new_center = hi - ((hi - lo) / 2);
+            for (int i=lo; i<hi; i++) {
+                wfa_offset_t boffset = get_offset(
                     &M_wavefronts[curr_wf],
-                    hi - quarter,
-                    half_num_sh_offsets_per_wf
-                    );
-            const wfa_offset_t lo_offset = get_offset(
-                    &M_wavefronts[curr_wf],
-                    lo + quarter,
-                    half_num_sh_offsets_per_wf
-                    );
+                    i,
+                    half_num_sh_offsets_per_wf);
+                int d_to_target = compute_distance_to_target(boffset, i, plen, tlen);
+                if (d_to_target < bmind) {
+                    bmind = d_to_target;
+                    new_center = i;
+                }
 
-            const int hi_distance = compute_distance_to_target(hi_offset,
-                                                               hi - quarter,
-                                                               plen,
-                                                               tlen);
-            const int lo_distance = compute_distance_to_target(lo_offset,
-                                                               lo + quarter,
-                                                               plen,
-                                                               tlen);
-
-            if (lo_distance > hi_distance) {
-                (*band_hi)++;
-                (*band_lo)++;
-            } else {
-                (*band_hi)--;
-                (*band_lo)--;
             }
+            const int new_hi = new_center + band;
+            const int new_lo = new_center - band;
+            update_hi_lo(M_wavefronts, active_working_set_size, new_hi, new_lo);
+            update_hi_lo(I_wavefronts, active_working_set_size, new_hi, new_lo);
+            update_hi_lo(D_wavefronts, active_working_set_size, new_hi, new_lo);
+
         }
     }
 }
@@ -460,7 +459,7 @@ __global__ void alignment_kernel (
     const int e = penalties.e;
 
     // For adaptative band
-    __shared__ int band_hi, band_lo;
+    //__shared__ int band_hi, band_lo;
 
     __shared__ uint32_t alignment_idx;
 
@@ -468,8 +467,8 @@ __global__ void alignment_kernel (
     // Initialise band
     if (tid == 0) {
         alignment_idx = get_alignment_idx(next_alignment_idx);
-        band_hi = band;
-        band_lo = -band;
+        //band_hi = band;
+        //band_lo = -band;
     }
 
     __syncthreads();
@@ -708,7 +707,7 @@ __global__ void alignment_kernel (
                         next_M(M_wavefronts, curr_wf, active_working_set_size, x,
                                text, pattern, tlen, plen, num_sh_offsets_per_wf/2,
                                last_free_bt_position, offloaded_backtraces,
-                               &band_hi, &band_lo, distance);
+                               distance);
                         D_wavefronts[curr_wf].exist = false;
                         I_wavefronts[curr_wf].exist = false;
                     } else {
@@ -718,7 +717,7 @@ __global__ void alignment_kernel (
                             x, o, e,
                             text, pattern, tlen, plen, num_sh_offsets_per_wf/2,
                             last_free_bt_position, offloaded_backtraces,
-                            &band_hi, &band_lo, distance);
+                            band, distance);
 
                         // Wavefront only grows if there's an operation in the ~I or
                         // ~D matrices
