@@ -35,6 +35,8 @@ __device__ static wfa_offset_t WF_extend_kernel (const char* text,
     int v  = EWAVEFRONT_V(k, offset_k);
     int h  = EWAVEFRONT_H(k, offset_k);
 
+    if (v > plen || h > tlen) return OFFSET_NULL;
+
     const int bases_to_cmp = 16;
     int acc = 0;
     // Compare 16 bases at once
@@ -115,7 +117,7 @@ __device__ int compute_distance_to_target (const wfa_offset_t offset,
                                           const int tlen) {
     const wfa_offset_t left_v = plen - EWAVEFRONT_V(k, offset);
     const wfa_offset_t left_h = tlen - EWAVEFRONT_H(k, offset);
-    return (offset >= 0) ? MAX(left_v,left_h) : -OFFSET_NULL;
+    return (offset >= 0) ? MAX(left_v,left_h) : INT_MAX;
 }
 
 __device__ static uint32_t get_alignment_idx (uint32_t* const next_alignment_idx) {

@@ -43,6 +43,10 @@ size_t wf_data_buffer_size (const affine_penalties_t penalties,
 size_t wf_data_buffer_size_distance (const affine_penalties_t penalties,
                                      const size_t max_steps);
 
+size_t available_shared_mem_per_block (const affine_penalties_t penalties,
+                                       const size_t max_steps,
+                                       const int threads_per_block);
+
 void allocate_wf_data_buffer_d (uint8_t** wf_data_buffer,
                                 const size_t max_steps,
                                 const affine_penalties_t penalties,
@@ -77,6 +81,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
                               const int max_steps,
                               const int threads_per_block,
                               const int num_blocks,
+                              size_t available_shared_mem_per_block,
                               int band,
                               cudaStream_t stream);
 
@@ -99,6 +104,7 @@ void launch_alignments_distance_async (const char* packed_sequences_buffer,
                                        const int max_steps,
                                        const int threads_per_block,
                                        const int num_blocks,
+                                       size_t available_shared_mem_per_block,
                                        int band,
                                        cudaStream_t stream);
 

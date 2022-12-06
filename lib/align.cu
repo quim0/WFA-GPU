@@ -169,6 +169,11 @@ void launch_alignments (char* sequences_buffer,
 
     int from, to, curr_batch_size, batch;
 
+    size_t available_sh_mem_per_block = available_shared_mem_per_block(
+            penalties,
+            max_distance,
+            threads_per_block);
+
     for (batch=0; batch < num_batchs; batch++) {
 
         const int prev_from = from;
@@ -220,6 +225,7 @@ void launch_alignments (char* sequences_buffer,
             max_distance,
             threads_per_block,
             num_blocks,
+            available_sh_mem_per_block,
             band,
             stream2
         );
@@ -592,6 +598,11 @@ void launch_alignments_distance (char* sequences_buffer,
                                          max_distance)
                                      );
 
+    size_t available_sh_mem_per_block = available_shared_mem_per_block(
+            penalties,
+            max_distance,
+            threads_per_block);
+
     int from, to, curr_batch_size, batch;
 
     for (batch=0; batch < num_batchs; batch++) {
@@ -640,6 +651,7 @@ void launch_alignments_distance (char* sequences_buffer,
             max_distance,
             threads_per_block,
             num_blocks,
+            available_sh_mem_per_block,
             band,
             stream2
         );
