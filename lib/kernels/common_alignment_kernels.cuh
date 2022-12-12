@@ -35,7 +35,7 @@ __device__ static wfa_offset_t WF_extend_kernel (const char* text,
     int v  = EWAVEFRONT_V(k, offset_k);
     int h  = EWAVEFRONT_H(k, offset_k);
 
-    if (v > plen || h > tlen) return OFFSET_NULL;
+    if (offset_k < 0 || v > plen || h > tlen) return OFFSET_NULL;
 
     const int bases_to_cmp = 16;
     int acc = 0;

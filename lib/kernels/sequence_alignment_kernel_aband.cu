@@ -66,6 +66,29 @@ __device__ static void set_offset (wfa_aband_wavefront_t* const wf,
     wf->offsets[k - wf->lo] = value;
 }
 
+#if 0
+__device__ static void pprint_wf(const char* title,
+                            const int distance,
+                            const wfa_aband_wavefront_t* wf,
+                            const size_t num_sh_offsets_per_wf) {
+    if (threadIdx.x == 0) {
+        printf("----- %s [%d] -----\n", title, distance);
+        printf("     K     |   OFFSET   |   BACKTRACE   |    PREV   |\n");
+        const int hi = wf->hi;
+        const int lo = wf->lo;
+        for (int k=lo; k<=hi; k++) {
+            const wfa_offset_t offset = get_offset(wf, k, num_sh_offsets_per_wf);
+            const bt_vector_t bt_vector = wf->backtraces_vectors[k];
+            const bt_prev_t bt_prev = wf->backtraces_pointers[k];
+            if (true || bt_vector != 0 && bt_prev == 0) {
+            printf("   %05d   |   %06d   |   %08x   |   %05d   |\n", k, offset, bt_vector, bt_prev);
+            }
+        }
+    }
+}
+#endif
+
+
 __device__ static void next_M (wfa_aband_wavefront_t* M_wavefronts,
                         const int curr_wf,
                         const int active_working_set_size,
@@ -146,25 +169,17 @@ __device__ static void next_MDI (wfa_aband_wavefront_t* M_wavefronts,
     int lo_ID = MIN(prev_wf_o->lo, MIN(prev_I_wf_e->lo, prev_D_wf_e->lo)) - 1;
     int lo    = MIN(prev_wf_x->lo, lo_ID);
 
-    while ((hi-lo) > num_sh_offsets_per_wf) {
+    while ((hi-lo) > num_sh_offsets_per_wf-1) {
         hi--;
+        if ((hi-lo) <= num_sh_offsets_per_wf-1) break;
         lo++;
-    }
-
-    while ((hi_ID-lo_ID) > num_sh_offsets_per_wf) {
-        hi_ID--;
-        lo_ID++;
     }
 
     // TODO: make cooperative
     const int prev_lo = prev_wf_x->lo;
     const int prev_hi = prev_wf_x->hi;
-    //__shared__ uint64_t packed_new_center;
 
-    //if (threadIdx.x == 0) packed_new_center = ((uint64_t)(2 * (tlen + plen))) << 32;
-    //__syncthreads();
-
-    if (((prev_hi-prev_lo) >= num_sh_offsets_per_wf) && (d % band) == 0) {
+    if (((prev_hi-prev_lo) >= num_sh_offsets_per_wf-1) && (d % band) == 0) {
         // start with current center
         int bmind = 2 * (tlen + plen);
         int new_center = prev_lo;
@@ -184,26 +199,11 @@ __device__ static void next_MDI (wfa_aband_wavefront_t* M_wavefronts,
 
         }
         //__syncthreads();
-        //int new_center = packed_new_center & 0xffffffff;
-        //int high_32_bits = packed_new_center >> 32;
         // The offset with hte minimum distance gets centered
-        hi = new_center + (num_sh_offsets_per_wf/2);
         lo = new_center - (num_sh_offsets_per_wf/2);
-        hi = new_center + (num_sh_offsets_per_wf/2);
-        lo_ID = new_center - (num_sh_offsets_per_wf/2);
-        //if (threadIdx.x == 0) printf("distance: %d, prev_hi: %d, prev_lo: %d, new_center: %d , to_move:%d\n", d, prev_hi, prev_lo, new_center, hi-prev_hi);
-
-        //const int a = num_sh_offsets_per_wf/6;
-        //if ((new_center-prev_lo) < (num_sh_offsets_per_wf/4)) {
-        //    // Max at lower quarter, move band down
-        //    //hi--; lo--; hi_ID--; lo_ID--;
-        //    hi -= a; lo -= a; hi_ID -= a; lo_ID -= a;
-        //} else if ((new_center-prev_lo) > (3*num_sh_offsets_per_wf/4)) {
-        //    // Max at higher quarter
-        //    //hi++; lo++; hi_ID++; lo_ID++;
-        //    hi += a; lo += a; hi_ID += a; lo_ID += a;
-        //}
+        hi = lo + num_sh_offsets_per_wf - 1;
     }
+
     //__syncthreads();
 
     if (threadIdx.x == 0) {
@@ -211,12 +211,12 @@ __device__ static void next_MDI (wfa_aband_wavefront_t* M_wavefronts,
         M_wavefronts[curr_wf].lo = lo;
         M_wavefronts[curr_wf].exist = true;
 
-        I_wavefronts[curr_wf].hi = hi_ID;
-        I_wavefronts[curr_wf].lo = lo_ID;
+        I_wavefronts[curr_wf].hi = hi;
+        I_wavefronts[curr_wf].lo = lo;
         I_wavefronts[curr_wf].exist = true;
 
-        D_wavefronts[curr_wf].hi = hi_ID;
-        D_wavefronts[curr_wf].lo = lo_ID;
+        D_wavefronts[curr_wf].hi = hi;
+        D_wavefronts[curr_wf].lo = lo;
         D_wavefronts[curr_wf].exist = true;
     }
     __syncthreads();
@@ -443,7 +443,6 @@ __global__ void alignment_kernel_aband (
     //   this number of wavefront is 3 times (WF_{max(o+e, x)} --> WF_s)
     extern __shared__ char sh_mem[];
 
-    // TODO: +1 because of the current wf?
     const int active_working_set_size = MAX(o+e, x) + 1;
     const int max_wf_size = 2 * max_steps + 1;
     const int max_wf_size_bt = 2 * max_steps + 1;
@@ -620,7 +619,7 @@ __global__ void alignment_kernel_aband (
                 I_wavefronts,
                 D_wavefronts,
                 active_working_set_size,
-                max_wf_size,
+                num_sh_offsets_per_wf,
                 &curr_wf);
 
             distance++;
@@ -682,8 +681,11 @@ __global__ void alignment_kernel_aband (
 
                     if (target_k_abs <= distance && M_exist) {
                         if (get_offset(&M_wavefronts[curr_wf], target_k, num_sh_offsets_per_wf) == target_offset) {
-                        finished = true;
-                        break;
+                            finished = true;
+                            break;
+                        } else if (get_offset(&M_wavefronts[curr_wf], target_k, num_sh_offsets_per_wf) > target_offset) {
+                            finished = false;
+                            break;
                         }
                     }
 
@@ -695,7 +697,7 @@ __global__ void alignment_kernel_aband (
                 I_wavefronts,
                 D_wavefronts,
                 active_working_set_size,
-                max_wf_size,
+                num_sh_offsets_per_wf,
                 &curr_wf);
 
             __syncthreads();
