@@ -19,8 +19,8 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef SEQUENCE_DISTANCE_CUH
-#define SEQUENCE_DISTANCE_CUH
+#ifndef SEQUENCE_DISTANCE_ABAND_CUH
+#define SEQUENCE_DISTANCE_ABAND_CUH
 
 #include <stdint.h>
 #include "wfa_types.h"
@@ -36,13 +36,11 @@
 typedef struct {
     int16_t hi;
     int16_t lo;
-    // At position 0, pointer to offsets in shared memory, at position 1,
-    // offsets at global memory
-    wfa_offset_t* offsets[2];
+    wfa_offset_t* offsets;
     bool exist;
-} wfa_distance_wavefront_t;
+} wfa_distance_aband_wavefront_t;
 
-__global__ void distance_kernel (
+__global__ void distance_kernel_aband (
                             const char* packed_sequences_buffer,
                             const sequence_pair_t* sequences_metadata,
                             const size_t num_alignments,
@@ -51,6 +49,7 @@ __global__ void distance_kernel (
                             const affine_penalties_t penalties,
                             alignment_result_t* results,
                             uint32_t* const next_alignment_idx,
-                            const size_t num_sh_offsets_per_wf);
+                            const size_t num_sh_offsets_per_wf,
+                            const int band);
 
 #endif

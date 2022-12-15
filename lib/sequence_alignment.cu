@@ -22,6 +22,7 @@
 #include "kernels/sequence_alignment_kernel.cuh"
 #include "kernels/sequence_alignment_kernel_aband.cuh"
 #include "kernels/sequence_distance_kernel.cuh"
+#include "kernels/sequence_distance_kernel_aband.cuh"
 #include "wfa_types.h"
 #include "utils/cuda_utils.cuh"
 #include "utils/logger.h"
@@ -365,7 +366,11 @@ void launch_alignments_distance_async (const char* packed_sequences_buffer,
     int offsets_elements = active_working_set * max_wf_size;
     offsets_elements = offsets_elements + (4 - (offsets_elements % 4));
 
-    size_t sh_mem_size = (active_working_set * sizeof(wfa_distance_wavefront_t) * 3);
+    size_t sh_mem_size;
+    if (band > 0)
+        sh_mem_size = (active_working_set * sizeof(wfa_distance_aband_wavefront_t) * 3);
+    else
+        sh_mem_size = (active_working_set * sizeof(wfa_distance_wavefront_t) * 3);
 
     available_sh_mem_per_block -= sh_mem_size;
     // Using 100% of the shared memory available can give some problems, as the
@@ -374,16 +379,26 @@ void launch_alignments_distance_async (const char* packed_sequences_buffer,
 
     const int max_sh_offsets_per_block = available_sh_mem_per_block / sizeof(wfa_offset_t);
     int max_sh_offsets_per_wf = max_sh_offsets_per_block / (active_working_set * 3);
-    // Make it an odd number
-    if ((max_sh_offsets_per_wf % 2) == 0) {
-        max_sh_offsets_per_wf--;
-    }
 
     // Make sure if fits in shared memory taking into account the wavefronts
     // metadata
     while ((max_sh_offsets_per_wf * sizeof(wfa_offset_t) * active_working_set * 3)
                 > available_sh_mem_per_block) {
         max_sh_offsets_per_wf -= 2;
+    }
+
+    if (band > 0) {
+        if (max_sh_offsets_per_wf < (threads_per_block)) {
+            LOG_ERROR("TODO: Less offsets than threads!!");
+            exit(-1);
+        } else if (max_sh_offsets_per_wf > (threads_per_block)) {
+            max_sh_offsets_per_wf = threads_per_block;
+        }
+    } else {
+        // Make it an odd number
+        if ((max_sh_offsets_per_wf % 2) == 0) {
+            max_sh_offsets_per_wf--;
+        }
     }
 
     // Add offsets size to shared memory
@@ -405,17 +420,29 @@ void launch_alignments_distance_async (const char* packed_sequences_buffer,
     LOG_DEBUG("Working with penalties: X=%d, O=%d, E=%d", penalties.x,
               penalties.o, penalties.e);
 
-    distance_kernel<<<gridSize, blockSize, sh_mem_size, stream>>>(
-                                              packed_sequences_buffer,
-                                              sequences_metadata,
-                                              num_alignments,
-                                              max_steps,
-                                              wf_data_buffer,
-                                              penalties,
-                                              results_d,
-                                              next_alignment_idx,
-                                              max_sh_offsets_per_wf,
-                                              band);
+    if (band > 0)
+        distance_kernel_aband<<<gridSize, blockSize, sh_mem_size, stream>>>(
+                                                  packed_sequences_buffer,
+                                                  sequences_metadata,
+                                                  num_alignments,
+                                                  max_steps,
+                                                  wf_data_buffer,
+                                                  penalties,
+                                                  results_d,
+                                                  next_alignment_idx,
+                                                  max_sh_offsets_per_wf,
+                                                  band);
+    else
+        distance_kernel<<<gridSize, blockSize, sh_mem_size, stream>>>(
+                                                  packed_sequences_buffer,
+                                                  sequences_metadata,
+                                                  num_alignments,
+                                                  max_steps,
+                                                  wf_data_buffer,
+                                                  penalties,
+                                                  results_d,
+                                                  next_alignment_idx,
+                                                  max_sh_offsets_per_wf);
     CUDA_CHECK_ERR
 }
 

@@ -157,7 +157,7 @@ __device__ static void next_MDI (wfa_aband_wavefront_t* M_wavefronts,
                           const size_t num_sh_offsets_per_wf,
                           unsigned int* const last_free_bt_position,
                           wfa_backtrace_t* const offloaded_backtraces,
-                          int band,
+                          const int band,
                           const int d) {
     wfa_aband_wavefront_t* const prev_wf_x  = &M_wavefronts[(curr_wf + x) % active_working_set_size];
     wfa_aband_wavefront_t* const prev_wf_o  = &M_wavefronts[(curr_wf + o + e) % active_working_set_size];
@@ -539,14 +539,6 @@ __global__ void alignment_kernel_aband (
         // recover)
         *last_free_bt_position = 1;
 
-        // Initialize all wavefronts to NULL
-        for (int i=tid; i<(offsets_size * 3); i+=blockDim.x) {
-#if __CUDA_ARCH__ >= 800
-            __stwt(&M_base[i], OFFSET_NULL);
-#else
-            M_base[i] = OFFSET_NULL;
-#endif
-        }
         // Shared mem
         for (int i=tid; i<(num_sh_offsets_per_wf * active_working_set_size * 3); i+=blockDim.x) {
             M_sh_offsets_base[i] =  OFFSET_NULL;

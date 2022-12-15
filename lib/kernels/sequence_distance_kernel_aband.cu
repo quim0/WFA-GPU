@@ -22,39 +22,27 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <cuda_runtime.h>
-#include "sequence_distance_kernel.cuh"
+#include "sequence_distance_kernel_aband.cuh"
 #include "common_alignment_kernels.cuh"
 
 __forceinline__
-__device__ static wfa_offset_t get_offset (const wfa_distance_wavefront_t* const wf,
-                                    int k,
-                                    const size_t half_num_sh_offsets_per_wf) {
-    const int limit = half_num_sh_offsets_per_wf;
-    const int is_global = (k > limit) || (k < -limit);
-    // predicate k operations
-    k += limit * (k < -limit);
-    k -= limit * (k > limit);
-    // offsets[0] -> ptr to shared memory
-    // offsets[1] -> ptr to global memory
-    return wf->offsets[is_global][k];
+__device__ static wfa_offset_t get_offset (const wfa_distance_aband_wavefront_t* const wf,
+                                    int k) {
+    if (k > wf->hi || k < wf->lo) return OFFSET_NULL;
+    return wf->offsets[k - wf->lo];
 }
 
 __forceinline__
-__device__ static void set_offset (wfa_distance_wavefront_t* const wf,
+__device__ static void set_offset (wfa_distance_aband_wavefront_t* const wf,
                             int k,
-                            const size_t half_num_sh_offsets_per_wf,
                             wfa_offset_t value) {
-    const int limit = half_num_sh_offsets_per_wf;
-    const int is_global = (k > limit) || (k < -limit);
-    // predicate k operations
-    k += limit * (k < -limit);
-    k -= limit * (k > limit);
-    // offsets[0] -> ptr to shared memory
-    // offsets[1] -> ptr to global memory
-    wf->offsets[is_global][k] = value;
+    if (k > wf->hi || k < wf->lo) {
+        return;
+    }
+    wf->offsets[k - wf->lo] = value;
 }
 
-__device__ static void next_M (wfa_distance_wavefront_t* M_wavefronts,
+__device__ static void next_M (wfa_distance_aband_wavefront_t* M_wavefronts,
                         const int curr_wf,
                         const int active_working_set_size,
                         const int x,
@@ -62,16 +50,15 @@ __device__ static void next_M (wfa_distance_wavefront_t* M_wavefronts,
                         const char* pattern,
                         const int tlen,
                         const int plen,
-                        const size_t half_num_sh_offsets_per_wf,
                         const int d) {
     // The wavefront do not grow in case of mismatch
-    const wfa_distance_wavefront_t* prev_wf = &M_wavefronts[(curr_wf + x) % active_working_set_size];
+    const wfa_distance_aband_wavefront_t* prev_wf = &M_wavefronts[(curr_wf + x) % active_working_set_size];
 
     const int hi = prev_wf->hi;
     const int lo = prev_wf->lo;
 
     for (int k=lo + threadIdx.x; k <= hi; k+=blockDim.x) {
-        wfa_offset_t curr_offset = get_offset(prev_wf, k, half_num_sh_offsets_per_wf) + 1;
+        wfa_offset_t curr_offset = get_offset(prev_wf, k) + 1;
 
         // Only extend and update backtrace if the previous offset exist
         if (curr_offset >= 0) {
@@ -79,7 +66,7 @@ __device__ static void next_M (wfa_distance_wavefront_t* M_wavefronts,
                                            tlen, plen, k, curr_offset);
         }
 
-        set_offset(&M_wavefronts[curr_wf], k, half_num_sh_offsets_per_wf, curr_offset);
+        set_offset(&M_wavefronts[curr_wf], k, curr_offset);
     }
 
     if (threadIdx.x == 0) {
@@ -89,9 +76,9 @@ __device__ static void next_M (wfa_distance_wavefront_t* M_wavefronts,
     }
 }
 
-__device__ static void next_MDI (wfa_distance_wavefront_t* M_wavefronts,
-                          wfa_distance_wavefront_t* I_wavefronts,
-                          wfa_distance_wavefront_t* D_wavefronts,
+__device__ static void next_MDI (wfa_distance_aband_wavefront_t* M_wavefronts,
+                          wfa_distance_aband_wavefront_t* I_wavefronts,
+                          wfa_distance_aband_wavefront_t* D_wavefronts,
                           const int curr_wf,
                           const int active_working_set_size,
                           const int x,
@@ -101,38 +88,84 @@ __device__ static void next_MDI (wfa_distance_wavefront_t* M_wavefronts,
                           const char* pattern,
                           const int tlen,
                           const int plen,
-                          const size_t half_num_sh_offsets_per_wf,
+                          const int band,
+                          const int num_sh_offsets_per_wf,
                           const int d) {
-    wfa_distance_wavefront_t* const prev_wf_x  = &M_wavefronts[(curr_wf + x) % active_working_set_size];
-    wfa_distance_wavefront_t* const prev_wf_o  = &M_wavefronts[(curr_wf + o + e) % active_working_set_size];
-    wfa_distance_wavefront_t* const prev_I_wf_e = &I_wavefronts[(curr_wf + e) % active_working_set_size];
-    wfa_distance_wavefront_t* const prev_D_wf_e = &D_wavefronts[(curr_wf + e) % active_working_set_size];
+    wfa_distance_aband_wavefront_t* const prev_wf_x  = &M_wavefronts[(curr_wf + x) % active_working_set_size];
+    wfa_distance_aband_wavefront_t* const prev_wf_o  = &M_wavefronts[(curr_wf + o + e) % active_working_set_size];
+    wfa_distance_aband_wavefront_t* const prev_I_wf_e = &I_wavefronts[(curr_wf + e) % active_working_set_size];
+    wfa_distance_aband_wavefront_t* const prev_D_wf_e = &D_wavefronts[(curr_wf + e) % active_working_set_size];
 
-    const int hi_ID = MAX(prev_wf_o->hi, MAX(prev_I_wf_e->hi, prev_D_wf_e->hi)) + 1;
-    const int hi    = MAX(prev_wf_x->hi, hi_ID);
+    const int hi_ID = MAX(prev_wf_o->hi, MAX(prev_I_wf_e->hi, prev_D_wf_e->hi)) + 1 ;
+    int hi    = MAX(prev_wf_x->hi, hi_ID);
     const int lo_ID = MIN(prev_wf_o->lo, MIN(prev_I_wf_e->lo, prev_D_wf_e->lo)) - 1;
-    const int lo    = MIN(prev_wf_x->lo, lo_ID);
+    int lo    = MIN(prev_wf_x->lo, lo_ID);
+
+    while ((hi-lo) > num_sh_offsets_per_wf-1) {
+        hi--;
+        if ((hi-lo) <= num_sh_offsets_per_wf-1) break;
+        lo++;
+    }
+
+    // TODO: make cooperative
+    const int prev_lo = prev_wf_x->lo;
+    const int prev_hi = prev_wf_x->hi;
+
+    if (((prev_hi-prev_lo) >= num_sh_offsets_per_wf-1) && (d % band) == 0) {
+        // start with current center
+        int bmind = 2 * (tlen + plen);
+        int new_center = prev_lo;
+        for (int i=prev_lo; i<prev_hi; i++) {
+            wfa_offset_t boffset = get_offset( prev_wf_x, i);
+            int d_to_target = compute_distance_to_target(boffset, i, plen, tlen);
+            if (d_to_target < bmind) {
+                bmind = d_to_target;
+                new_center = i;
+            }
+
+        }
+        // The offset with hte minimum distance gets centered
+        lo = new_center - (num_sh_offsets_per_wf/2);
+        hi = lo + num_sh_offsets_per_wf - 1;
+    }
+
+    if (threadIdx.x == 0) {
+        M_wavefronts[curr_wf].hi = hi;
+        M_wavefronts[curr_wf].lo = lo;
+        M_wavefronts[curr_wf].exist = true;
+
+        I_wavefronts[curr_wf].hi = hi;
+        I_wavefronts[curr_wf].lo = lo;
+        I_wavefronts[curr_wf].exist = true;
+
+        D_wavefronts[curr_wf].hi = hi;
+        D_wavefronts[curr_wf].lo = lo;
+        D_wavefronts[curr_wf].exist = true;
+
+    }
+
+    __syncthreads();
 
     for (int k=lo + threadIdx.x; k <= hi; k+=blockDim.x) {
         // ~I offsets
-        const wfa_offset_t I_gap_open_offset = get_offset(prev_wf_o, k - 1, half_num_sh_offsets_per_wf) + 1;
-        const wfa_offset_t I_gap_extend_offset = get_offset(prev_I_wf_e, k - 1, half_num_sh_offsets_per_wf) + 1;
+        const wfa_offset_t I_gap_open_offset = get_offset(prev_wf_o, k - 1) + 1;
+        const wfa_offset_t I_gap_extend_offset = get_offset(prev_I_wf_e, k - 1) + 1;
 
         int64_t I_offset = MAX(I_gap_open_offset, I_gap_extend_offset);
 
-        set_offset(&I_wavefronts[curr_wf], k, half_num_sh_offsets_per_wf, I_offset);
+        set_offset(&I_wavefronts[curr_wf], k, I_offset);
 
         // ~D offsets
-        const wfa_offset_t D_gap_open_offset = get_offset(prev_wf_o, k + 1, half_num_sh_offsets_per_wf);
+        const wfa_offset_t D_gap_open_offset = get_offset(prev_wf_o, k + 1);
 
-        const wfa_offset_t D_gap_extend_offset = get_offset(prev_D_wf_e, k + 1, half_num_sh_offsets_per_wf);
+        const wfa_offset_t D_gap_extend_offset = get_offset(prev_D_wf_e, k + 1);
 
         int64_t D_offset = MAX(D_gap_open_offset, D_gap_extend_offset);
 
-        set_offset(&D_wavefronts[curr_wf], k, half_num_sh_offsets_per_wf, D_offset);
+        set_offset(&D_wavefronts[curr_wf], k, D_offset);
 
         // ~M update
-        const wfa_offset_t X_offset = get_offset(prev_wf_x, k, half_num_sh_offsets_per_wf) + 1;
+        const wfa_offset_t X_offset = get_offset(prev_wf_x, k) + 1;
 
         wfa_offset_t M_offset = MAX(MAX((int64_t)X_offset, D_offset), I_offset);
 
@@ -141,27 +174,13 @@ __device__ static void next_MDI (wfa_distance_wavefront_t* M_wavefronts,
             M_offset = WF_extend_kernel(text, pattern, tlen, plen, k, M_offset);
         }
 
-        set_offset(&M_wavefronts[curr_wf], k, half_num_sh_offsets_per_wf,  M_offset);
-    }
-
-    if (threadIdx.x == 0) {
-        M_wavefronts[curr_wf].hi = hi;
-        M_wavefronts[curr_wf].lo = lo;
-        M_wavefronts[curr_wf].exist = true;
-
-        I_wavefronts[curr_wf].hi = hi_ID;
-        I_wavefronts[curr_wf].lo = lo_ID;
-        I_wavefronts[curr_wf].exist = true;
-
-        D_wavefronts[curr_wf].hi = hi_ID;
-        D_wavefronts[curr_wf].lo = lo_ID;
-        D_wavefronts[curr_wf].exist = true;
+        set_offset(&M_wavefronts[curr_wf], k, M_offset);
     }
 }
 
-__device__ static void update_curr_wf (wfa_distance_wavefront_t* M_wavefronts,
-                                       wfa_distance_wavefront_t* I_wavefronts,
-                                       wfa_distance_wavefront_t* D_wavefronts,
+__device__ static void update_curr_wf (wfa_distance_aband_wavefront_t* M_wavefronts,
+                                       wfa_distance_aband_wavefront_t* I_wavefronts,
+                                       wfa_distance_aband_wavefront_t* D_wavefronts,
                                        const int active_working_set_size,
                                        const int max_wf_size,
                                        int* curr_wf) {
@@ -172,7 +191,7 @@ __device__ static void update_curr_wf (wfa_distance_wavefront_t* M_wavefronts,
 
 }
 
-__global__ void distance_kernel (
+__global__ void distance_kernel_aband (
                             const char* packed_sequences_buffer,
                             const sequence_pair_t* sequences_metadata,
                             const size_t num_alignments,
@@ -181,7 +200,8 @@ __global__ void distance_kernel (
                             const affine_penalties_t penalties,
                             alignment_result_t* results,
                             uint32_t* const next_alignment_idx,
-                            const size_t num_sh_offsets_per_wf) {
+                            const size_t num_sh_offsets_per_wf,
+                            const int band) {
     const int tid = threadIdx.x;
     // m = 0 for WFA
     const int x = penalties.x;
@@ -191,18 +211,15 @@ __global__ void distance_kernel (
     __shared__ uint32_t alignment_idx;
 
     // Get the first alignment to compute from the alignments pool
+    // Initialise band
     if (tid == 0) {
         alignment_idx = get_alignment_idx(next_alignment_idx);
     }
 
     __syncthreads();
 
-    // In shared memory:
-    // - Wavefronts needed to calculate current WF_s, there are 3 "pyramids" so
-    //   this number of wavefront is 3 times (WF_{max(o+e, x)} --> WF_s)
     extern __shared__ char sh_mem[];
 
-    // TODO: +1 because of the current wf?
     const int active_working_set_size = MAX(o+e, x) + 1;
     const int max_wf_size = 2 * max_steps + 1;
 
@@ -215,16 +232,11 @@ __global__ void distance_kernel (
     uint8_t* curr_alignment_wf_data_buffer = wf_data_buffer
                                              + (wf_data_buffer_size * blockIdx.x);
 
-    wfa_offset_t* M_base = (wfa_offset_t*)curr_alignment_wf_data_buffer;
-    wfa_offset_t* I_base = M_base + offsets_size;
-    wfa_offset_t* D_base = I_base + offsets_size;
-
     // Wavefronts structres reside in shared
-    wfa_distance_wavefront_t* M_wavefronts = (wfa_distance_wavefront_t*)sh_mem;
-    wfa_distance_wavefront_t* I_wavefronts = (M_wavefronts + active_working_set_size);
-    wfa_distance_wavefront_t* D_wavefronts = (I_wavefronts + active_working_set_size);
+    wfa_distance_aband_wavefront_t* M_wavefronts = (wfa_distance_aband_wavefront_t*)sh_mem;
+    wfa_distance_aband_wavefront_t* I_wavefronts = (M_wavefronts + active_working_set_size);
+    wfa_distance_aband_wavefront_t* D_wavefronts = (I_wavefronts + active_working_set_size);
 
-    // TODO: Check this
     wfa_offset_t* M_sh_offsets_base = (wfa_offset_t*)((uint32_t*)(D_wavefronts + active_working_set_size));
     wfa_offset_t* I_sh_offsets_base = M_sh_offsets_base
                                       + (num_sh_offsets_per_wf * active_working_set_size);
@@ -232,20 +244,12 @@ __global__ void distance_kernel (
                                       + (num_sh_offsets_per_wf * active_working_set_size);
 
     for (int i=tid; i<active_working_set_size; i+=blockDim.x) {
-        M_wavefronts[i].offsets[1] = M_base + (i * max_wf_size) + (max_wf_size/2);
-        M_wavefronts[i].offsets[0] = M_sh_offsets_base
-                                         + (i * num_sh_offsets_per_wf)
-                                         + (num_sh_offsets_per_wf/2);
-
-        I_wavefronts[i].offsets[1] = I_base + (i * max_wf_size) + (max_wf_size/2);
-        I_wavefronts[i].offsets[0] = I_sh_offsets_base
-                                         + (i * num_sh_offsets_per_wf)
-                                         + (num_sh_offsets_per_wf/2);
-
-        D_wavefronts[i].offsets[1] = D_base + (i * max_wf_size) + (max_wf_size/2);
-        D_wavefronts[i].offsets[0] = D_sh_offsets_base
-                                         + (i * num_sh_offsets_per_wf)
-                                         + (num_sh_offsets_per_wf/2);
+        M_wavefronts[i].offsets = M_sh_offsets_base
+                                         + (i * num_sh_offsets_per_wf);
+        I_wavefronts[i].offsets = I_sh_offsets_base
+                                         + (i * num_sh_offsets_per_wf);
+        D_wavefronts[i].offsets = D_sh_offsets_base
+                                         + (i * num_sh_offsets_per_wf);
     }
 
     // Iterate until there are no more alignments in the pool to compute
@@ -270,14 +274,6 @@ __global__ void distance_kernel (
         const int tlen = metadata.text_len;
         const int plen = metadata.pattern_len;
 
-        // Initialize all wavefronts to NULL
-        for (int i=tid; i<(offsets_size * 3); i+=blockDim.x) {
-#if __CUDA_ARCH__ >= 800
-            __stwt(&M_base[i], OFFSET_NULL);
-#else
-            M_base[i] = OFFSET_NULL;
-#endif
-        }
         // Shared mem
         for (int i=tid; i<(num_sh_offsets_per_wf * active_working_set_size * 3); i+=blockDim.x) {
             M_sh_offsets_base[i] =  OFFSET_NULL;
@@ -308,13 +304,12 @@ __global__ void distance_kernel (
                 tlen, plen,
                 0, 0);
             //M_wavefronts[curr_wf].offsets[0] = initial_ext;
-            set_offset(&M_wavefronts[curr_wf], 0, num_sh_offsets_per_wf/2, initial_ext);
+            set_offset(&M_wavefronts[curr_wf], 0, initial_ext);
             M_wavefronts[curr_wf].exist = true;
         }
 
         __syncthreads();
 
-        // TODO: Change tarket K if we don't start form WF 0 (cooperative strategy)
         const int target_k = EWAVEFRONT_DIAGONAL(tlen, plen);
         const int target_k_abs = (target_k >= 0) ? target_k : -target_k;
         const wfa_offset_t target_offset = EWAVEFRONT_OFFSET(tlen, plen);
@@ -324,7 +319,7 @@ __global__ void distance_kernel (
         int distance = 0;
         // steps = number of editions
         int steps = 0;
-        if (!(target_k_abs <= distance && M_wavefronts[curr_wf].exist && get_offset(&M_wavefronts[curr_wf], target_k, num_sh_offsets_per_wf/2) == target_offset)) {
+        if (!(target_k_abs <= distance && M_wavefronts[curr_wf].exist && get_offset(&M_wavefronts[curr_wf], target_k) == target_offset)) {
 
             update_curr_wf(
                 M_wavefronts,
@@ -368,8 +363,7 @@ __global__ void distance_kernel (
                 } else {
                     if (M_exist && !GAP_exist) {
                         next_M(M_wavefronts, curr_wf, active_working_set_size, x,
-                               text, pattern, tlen, plen, num_sh_offsets_per_wf/2,
-                               distance);
+                               text, pattern, tlen, plen, distance);
                         D_wavefronts[curr_wf].exist = false;
                         I_wavefronts[curr_wf].exist = false;
                     } else {
@@ -377,7 +371,7 @@ __global__ void distance_kernel (
                             M_wavefronts, I_wavefronts, D_wavefronts,
                             curr_wf, active_working_set_size,
                             x, o, e,
-                            text, pattern, tlen, plen, num_sh_offsets_per_wf/2,
+                            text, pattern, tlen, plen, band, num_sh_offsets_per_wf,
                             distance);
 
                         // Wavefront only grows if there's an operation in the ~I or
@@ -385,13 +379,16 @@ __global__ void distance_kernel (
                         steps++;
                     }
 
-                    // TODO: This is necessary for now, try to find a less sync
-                    // version
                     __syncthreads();
 
-                    if (target_k_abs <= distance && M_exist && get_offset(&M_wavefronts[curr_wf], target_k, num_sh_offsets_per_wf/2) == target_offset) {
-                        finished = true;
-                        break;
+                    if (target_k_abs <= distance && M_exist) {
+                        if (get_offset(&M_wavefronts[curr_wf], target_k) == target_offset) {
+                            finished = true;
+                            break;
+                        } else if (get_offset(&M_wavefronts[curr_wf], target_k) > target_offset) {
+                            finished = false;
+                            break;
+                        }
                     }
 
                     distance++;
