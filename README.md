@@ -70,28 +70,30 @@ Running the binary without any arguments lists the help menu:
 
 ```
 [Input/Output]
-	-i, --input-file                    (string, required) Input sequences file: File containing the sequences to align.
-	-n, --num-alignments                (int) Number of alignments: Number of alignments to read from the file (default=all alignments)
-	-o, --output-file                   (string) Output File: File where alignment output is saved.
-	-p, --print-output                  Print: Print output to stderr
-	-O, --output-verbose                Verbose output: Add the query/target information on the output
+        -i, --input-file                    (string, required) Input sequences file: File containing the sequences to align.
+        -n, --num-alignments                (int) Number of alignments: Number of alignments to read from the file (default=all alignments)
+        -o, --output-file                   (string) Output File: File where alignment output is saved.
+        -p, --print-output                  Print: Print output to stderr
+        -O, --output-verbose                Verbose output: Add the query/target information on the output
 [Alignment Options]
-	-g, --affine-penalties              (string, required) Affine penalties: Gap-affine penalties for the alignment, in format x,o,e
-	-x, --compute-cigar                 Compute CIGAR: Compute the optimal alignment path (CIGAR) of all the alignments, otherwise, only the distance is computed.
-	-e, --max-distance                  (int) Maximum error allowed: Maximum error that the kernel will be able to compute (default = maximum possible error of first alignment)
-	-b, --batch-size                    (int) Batch size: Number of alignments per batch.
-	-B, --band                          (int) Adaptative band: Wavefront band (highest and lower diagonal that will be initially computed). Use "auto" to use an automatically generated band according to other parameters.
+        -g, --affine-penalties              (string, required) Affine penalties: Gap-affine penalties for the alignment, in format x,o,e
+        -x, --compute-cigar                 Compute CIGAR: Compute the optimal alignment path (CIGAR) of all the alignments, otherwise, only the distance is computed.
+        -e, --max-distance                  (int) Maximum error allowed: Maximum error that the kernel will be able to compute (default = maximum possible error of first alignment)
+        -b, --batch-size                    (int) Batch size: Number of alignments per batch.
+        -B, --band                          (int) Banded execution: If this parameter is present, a banded approach is used (heuristic).
+                                                  The parameter tells how many steps to wait until the band is re-centered. Use "auto" to
+                                                  use an automatically generated band.
 [System]
-	-c, --check                         Check: Check for alignment correctness
-	-t, --threads-per-block             (int) Number of CUDA threads per alginment: Number of CUDA threads per block, each block computes one or multiple alignment
-	-w, --workers                       (int) GPU workers: Number of blocks ('workers') to be running on the GPU.
+        -c, --check                         Check: Check for alignment correctness
+        -t, --threads-per-block             (int) Number of CUDA threads per alginment: Number of CUDA threads per block, each block computes one or multiple alignment
+        -w, --workers                       (int) GPU workers: Number of blocks ('workers') to be running on the GPU.
 ```
 
 Choosing the correct alignment and system options is key for performance. The binary tries to automatically choose adequate paramters, but the user
 may have additional information to make a better choise. It is specially important to limit the maximum error supported by the kernel as much as
 possible (`-e` parameter), this contrains the memory used per alignment, and helps the program to choose better block and grid sizes. Keep in mind that any alignment having an error higher than the specified with the `-e` argument will be computed on the CPU, so, if this argument is too small, performance can decrease.
 
-For big alignments, setting a band (i.e. limiting the maximum and minimum diagonal of the wavefronts) with the `-B` argument can give significant
+For big alignments, setting a band (i.e. limiting maximum wavefront size) with the `-B` argument can give significant
 speedups, at the expense of potentially loosing some accuracy in corner cases.
 
 ## Troubleshooting
