@@ -127,9 +127,10 @@ int main(int argc, char** argv) {
          .required = false,
          .type = ARG_INT
          },
-        {.name = "Adaptative band",
-         .description = "Wavefront band (highest and lower diagonal that will be initially computed)."
-                        " Use \"auto\" to use an automatically generated band according to other parameters.",
+        {.name = "Banded execution",
+         .description = "If this parameter is present, a banded approach is used (heuristic)."
+                        "The parameter tells how many steps to wait until the band is re-centered."
+                        " Use \"auto\" to use an automatically generated band.",
          .category = CAT_ALIGN,
          .short_arg = 'B',
          .long_arg = "band",
@@ -315,27 +316,10 @@ int main(int argc, char** argv) {
             exit(-1);
         }
         if (band == 0) {
-            // Automatic band = two iterations on the maximum distance
-            band = threads_per_block - 1;
-            if ((band+1) >= max_distance) {
-                LOG_INFO("Band too big, adjusting from %d to %d.", band, band/2)
-                band = band / 2;
-                // Also adjust threads per block, minimum 64 threads per block
-                threads_per_block /= (threads_per_block <= 128) ? 1 : 2;
-            }
-
+            // Automatic band = adjust band every 25 steps
+            band = 25;
         }
-        if ((2 * band + 1) < (threads_per_block-1)) {
-            // Some threads will be never used
-            LOG_WARN("Using band=%d produce a maximum wavefront size of %d, "
-                     "which is lower\n             than the number of CUDA threads "
-                     "working on each alignment (%d). To\n             "
-                     "maximise the GPU utilisation, use a band >=%d or reduce "
-                     "the number of\n             threads per worker (-t).",
-                     band, 2 * band + 1, threads_per_block,
-                     threads_per_block / 2 - 1)
-        }
-        LOG_INFO("Banded execution. Max diagonal: %d, Min diagonal: %d", band, -band)
+        LOG_INFO("Banded execution. Band width: %d. Band re-centering every %d steps", threads_per_block, band)
     } else {
         band = -1;
     }
