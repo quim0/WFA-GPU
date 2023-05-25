@@ -50,16 +50,16 @@ bool wfagpu_add_sequences (wfagpu_aligner_t* aligner,
                     const char* query,
                     const char* target);
 
-void wfagpu_initialize_aligner (wfagpu_aligner_t* aligner);
+bool wfagpu_initialize_aligner (wfagpu_aligner_t* aligner);
 
-void wfagpu_initialize_parameters (wfagpu_aligner_t* aligner,
+bool wfagpu_initialize_parameters (wfagpu_aligner_t* aligner,
                                    affine_penalties_t penalties);
 
-void wfagpu_set_batch_size (wfagpu_aligner_t* aligner, size_t batch_size);
+bool wfagpu_set_batch_size (wfagpu_aligner_t* aligner, size_t batch_size);
 
 void wfagpu_destroy_aligner (wfagpu_aligner_t* aligner);
 
-void wfagpu_align (wfagpu_aligner_t* aligner);
+bool wfagpu_align (wfagpu_aligner_t* aligner);
 
 #if __cplusplus // end of extern "C"
 }

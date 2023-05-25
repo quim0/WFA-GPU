@@ -25,7 +25,9 @@
 int main() {
     // Create and initialize the aligner structure
     wfagpu_aligner_t aligner = {0};
-    wfagpu_initialize_aligner(&aligner);
+    bool ok = wfagpu_initialize_aligner(&aligner);
+    if (!ok)
+        return 1;
 
     // Add the sequences to align: wfagpu_add_sequences(aligner, query, target)
     wfagpu_add_sequences(&aligner,
@@ -44,17 +46,23 @@ int main() {
     // Initialize the alignment parameters (*after* the sequences have been
     // added)
     affine_penalties_t penalties = {.x = 2, .o = 3, .e = 1};
-    wfagpu_initialize_parameters(&aligner, penalties);
+    ok = wfagpu_initialize_parameters(&aligner, penalties);
+    if (!ok)
+        return 1;
 
     // Optionally set batch size, in this case (we have 4 alginments), setting a
     // batch size of 2 will execute two batches
-    wfagpu_set_batch_size(&aligner, 2);
+    ok = wfagpu_set_batch_size(&aligner, 2);
+    if (!ok)
+        return 1;
 
     // Compute the optimal alignment path (CIGAR) or only the distance
     aligner.alignment_options.compute_cigar = true;
 
     // Align all sequence pairs
-    wfagpu_align(&aligner);
+    ok = wfagpu_align(&aligner);
+    if (!ok)
+        return 1;
 
     // Read the results
     for (int i=0; i<aligner.alignment_options.num_alignments; i++) {

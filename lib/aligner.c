@@ -30,6 +30,11 @@
 #define INITIAL_CIGAR_LEN (50)
 
 static bool initialize_sequences_buffer (wfagpu_aligner_t* aligner) {
+    if (aligner == NULL) {
+        LOG_ERROR("Invalid aligner.");
+        return false;
+    }
+
     if (aligner->sequences_buffer != NULL) {
         LOG_WARN("Sequence buffer pointer is not NULL, not initializing.");
         return false;
@@ -44,6 +49,11 @@ static bool initialize_sequences_buffer (wfagpu_aligner_t* aligner) {
 }
 
 static bool grow_sequences_buffer (wfagpu_aligner_t* aligner) {
+    if (aligner == NULL) {
+        LOG_ERROR("Invalid aligner.");
+        return false;
+    }
+
     if (aligner->sequences_buffer == NULL) {
         LOG_WARN("Sequence buffer not initialized, not resizing.");
         return false;
@@ -61,6 +71,11 @@ static bool grow_sequences_buffer (wfagpu_aligner_t* aligner) {
 }
 
 static bool initialize_sequences_metadata (wfagpu_aligner_t* aligner) {
+    if (aligner == NULL) {
+        LOG_ERROR("Invalid aligner.");
+        return false;
+    }
+
     if (aligner->sequences_metadata != NULL) {
         LOG_WARN("Sequence metadata pointer is not NULL, not initializing.");
         return false;
@@ -75,6 +90,11 @@ static bool initialize_sequences_metadata (wfagpu_aligner_t* aligner) {
 }
 
 static bool grow_sequences_metadata (wfagpu_aligner_t* aligner) {
+    if (aligner == NULL) {
+        LOG_ERROR("Invalid aligner.");
+        return false;
+    }
+
     if (aligner->sequences_metadata == NULL) {
         LOG_WARN("Sequence metadata buffer not initialized, not resizing.");
         return false;
@@ -94,6 +114,16 @@ static bool grow_sequences_metadata (wfagpu_aligner_t* aligner) {
 bool wfagpu_add_sequences (wfagpu_aligner_t* aligner,
                            const char* query,
                            const char* target) {
+    if (aligner == NULL) {
+        LOG_ERROR("Invalid aligner.");
+        return false;
+    }
+
+    if (query == NULL || target == NULL) {
+        LOG_ERROR("Invalid sequence pointers.");
+        return false;
+    }
+
     // +1 for the nullbyte
     size_t pattern_offset;
     if (aligner->last_sequence_pair_idx == -1) {
@@ -102,9 +132,14 @@ bool wfagpu_add_sequences (wfagpu_aligner_t* aligner,
         sequence_pair_t last_pair_metadata = aligner->sequences_metadata[aligner->last_sequence_pair_idx];
         pattern_offset = WFA_ALIGN_32_BITS(last_pair_metadata.text_offset + last_pair_metadata.text_len + 1);
     }
-    const size_t pattern_len = strlen(query);
+    const size_t pattern_len = strnlen(query, MAX_SEQ_LEN);
     const size_t text_offset = WFA_ALIGN_32_BITS(pattern_offset + pattern_len + 1);
-    const size_t text_len = strlen(target);
+    const size_t text_len = strnlen(target, MAX_SEQ_LEN);
+
+    if (pattern_len >= MAX_SEQ_LEN || text_len >= MAX_SEQ_LEN) {
+        LOG_WARN("Sequences must be shorter than %lu.", MAX_SEQ_LEN-1);
+        return false;
+    }
 
     while ((text_offset + text_len + 1) >= aligner->sequences_buffer_len) {
         if (!grow_sequences_buffer(aligner)) {
@@ -122,8 +157,8 @@ bool wfagpu_add_sequences (wfagpu_aligner_t* aligner,
 
     const size_t curr_seq_idx = (aligner->last_sequence_pair_idx) + 1;
 
-    strcpy(aligner->sequences_buffer + pattern_offset, query);
-    strcpy(aligner->sequences_buffer + text_offset, target);
+    strncpy(aligner->sequences_buffer + pattern_offset, query, pattern_len);
+    strncpy(aligner->sequences_buffer + text_offset, target, text_len);
 
     aligner->sequences_metadata[curr_seq_idx].pattern_offset = pattern_offset;
     aligner->sequences_metadata[curr_seq_idx].pattern_len = pattern_len;
@@ -136,15 +171,24 @@ bool wfagpu_add_sequences (wfagpu_aligner_t* aligner,
     return true;
 }
 
-void wfagpu_initialize_aligner (wfagpu_aligner_t* aligner) {
+bool wfagpu_initialize_aligner (wfagpu_aligner_t* aligner) {
+    if (aligner == NULL) {
+        LOG_ERROR("Invalid aligner.");
+        return false;
+    }
     memset(aligner, 0, sizeof(wfagpu_aligner_t));
     aligner->last_sequence_pair_idx = -1;
-    initialize_sequences_buffer(aligner);
-    initialize_sequences_metadata(aligner);
+    if (!initialize_sequences_buffer(aligner)) return false;
+    if (!initialize_sequences_metadata(aligner)) return false;
+    return true;
 }
 
-void wfagpu_initialize_parameters (wfagpu_aligner_t* aligner,
+bool wfagpu_initialize_parameters (wfagpu_aligner_t* aligner,
                                    affine_penalties_t penalties) {
+    if (aligner == NULL) {
+        LOG_ERROR("Invalid aligner.");
+        return false;
+    }
     wfagpu_set_default_options(&(aligner->alignment_options),
                                aligner->sequences_metadata,
                                penalties,
@@ -152,10 +196,26 @@ void wfagpu_initialize_parameters (wfagpu_aligner_t* aligner,
     initialize_wfa_results(&(aligner->results),
                            aligner->num_sequence_pairs,
                            INITIAL_CIGAR_LEN);
+    return true;
 }
 
-void wfagpu_set_batch_size (wfagpu_aligner_t* aligner, size_t batch_size) {
+bool wfagpu_set_batch_size (wfagpu_aligner_t* aligner, size_t batch_size) {
+    if (aligner == NULL) {
+        LOG_ERROR("Invalid aligner.");
+        return false;
+    }
+
+    if (batch_size > aligner->num_sequence_pairs) {
+        LOG_WARN("Batch size must be less or equal than the number of sequences. Setting batch size to %lu.", aligner->num_sequence_pairs);
+        batch_size = aligner->num_sequence_pairs;
+    }
+
+    if (batch_size == 0) {
+        LOG_WARN("Batch size can not be zero. Setting batch size to %lu.", aligner->num_sequence_pairs);
+        batch_size = aligner->num_sequence_pairs;
+    }
     aligner->alignment_options.batch_size = batch_size;
+    return true;
 }
 
 void wfagpu_destroy_aligner (wfagpu_aligner_t* aligner) {
@@ -164,7 +224,12 @@ void wfagpu_destroy_aligner (wfagpu_aligner_t* aligner) {
     if (aligner->results != NULL) destroy_wfa_results(aligner->results, aligner->num_sequence_pairs);
 }
 
-void wfagpu_align (wfagpu_aligner_t* aligner) {
+bool wfagpu_align (wfagpu_aligner_t* aligner) {
+    if (aligner == NULL) {
+        LOG_ERROR("Invalid aligner.");
+        return false;
+    }
+
     if (aligner->alignment_options.compute_cigar) {
         launch_alignments(
             aligner->sequences_buffer,
@@ -184,4 +249,5 @@ void wfagpu_align (wfagpu_aligner_t* aligner) {
             false // Check if results are correct
         );
     }
+    return true;
 }
