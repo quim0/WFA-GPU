@@ -86,7 +86,11 @@ static void wfagpu_set_default_options (wfa_alignment_options_t* wfa_options,
                                      size_t num_alignments) {
     int slen = MAX(sequences_metadata[0].pattern_len, sequences_metadata[0].text_len);
     slen = MIN(slen*0.1, slen);
-    wfa_options->max_error = slen * MAX(penalties.x, MAX(penalties.o, penalties.e));
+
+    int max_error = slen * MAX(penalties.x, MAX(penalties.o, penalties.e));
+    // The automatic error threshold should not be too small (<50)
+    max_error = MAX(max_error, 50);
+    wfa_options->max_error = max_error;
 
     int num_threads = wfa_get_threads_per_alignment(wfa_options->max_error);
     wfa_options->threads_per_block = num_threads;

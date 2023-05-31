@@ -33,7 +33,7 @@
 #include <errno.h>
 #include <string.h>
 
-#define NUM_ARGUMENTS 13
+#define NUM_ARGUMENTS 15
 #define NUM_CATEGORIES 3
 
 typedef enum {
@@ -42,21 +42,44 @@ typedef enum {
     CAT_SYS
 } menu_categories_t;
 
+typedef enum {
+    NONE,
+    SEQ,
+    FASTA
+} wfa_file_format_t;
+
 const char* menu_categories[] = {
     "Input/Output",      // 0
     "Alignment Options", // 1
     "System"             // 2
 };
 
+
 int main(int argc, char** argv) {
 
     option_t options_arr[NUM_ARGUMENTS] = {
-        {.name = "Input sequences file",
-         .description = "File containing the sequences to align.",
+        {.name = "Input sequences file in .seq format",
+         .description = "File containing the sequences to align in .seq format.",
          .category = CAT_IO,
          .short_arg = 'i',
-         .long_arg = "input-file",
-         .required = true,
+         .long_arg = "input-seq",
+         .required = false,
+         .type = ARG_STR
+         },
+        {.name = "Input query file in .fasta format",
+         .description = "File containing the query sequences to align (if not using a .seq file).",
+         .category = CAT_IO,
+         .short_arg = 'Q',
+         .long_arg = "input-fasta-query",
+         .required = false,
+         .type = ARG_STR
+         },
+        {.name = "Input target file in .fasta format",
+         .description = "File containing the target sequences to align (if not using a .seq file).",
+         .category = CAT_IO,
+         .short_arg = 'T',
+         .long_arg = "input-fasta-target",
+         .required = false,
          .type = ARG_STR
          },
         {.name = "Number of alignments",
@@ -73,7 +96,7 @@ int main(int argc, char** argv) {
          .category = CAT_ALIGN,
          .short_arg = 'g',
          .long_arg = "affine-penalties",
-         .required = true,
+         .required = false,
          .type = ARG_STR
          },
         {.name = "Compute CIGAR",
@@ -185,12 +208,51 @@ int main(int argc, char** argv) {
     bool success = parse_args(argc, argv, options);
     if (!success) {
         print_usage(options);
+        printf("[Examples]\n");
+        printf("\t./bin/wfa.affine.gpu -i sequences.seq -b <batch_size> -o scores.out\n");
+        printf("\t./bin/wfa.affine.gpu -i sequences.seq -b <batch_size> -B auto -o scores-banded.out\n");
+        printf("\t./bin/wfa.affine.gpu -Q queries.fasta -T targets.fasta -b <batch_size> -o scores.out\n");
+        printf("\t./bin/wfa.affine.gpu -Q queries.fasta -T targets.fasta -b <batch_size> -x -o cigars.out\n");
         exit(1);
     }
 
+    wfa_file_format_t file_format = NONE;
+    option_t* opt_seq_file = get_option(options, 'i');
+    option_t* opt_fasta_target = get_option(options, 'T');
+    option_t* opt_fasta_query = get_option(options, 'Q');
+    if (opt_fasta_target->parsed && opt_fasta_query->parsed)
+        file_format = FASTA;
+    if (opt_seq_file->parsed)
+        file_format = SEQ;
+
+    if (file_format == NONE) {
+        LOG_ERROR("No input file provided.");
+        return 1;
+    }
+
     sequence_reader_t sequence_reader = {0};
-    char* sequences_file = get_option(options, 'i')->value.str_val;
-    init_sequence_reader(&sequence_reader, sequences_file);
+    sequence_reader_fasta_t sequence_reader_fasta = {0};
+    if (file_format == SEQ) {
+        bool ok = init_sequence_reader(
+                &sequence_reader,
+                opt_seq_file->value.str_val);
+        if (!ok) {
+            LOG_ERROR("Error initializing the sequence reader.");
+            return 1;
+        }
+    } else if (file_format == FASTA) {
+        bool ok = init_sequence_reader_fasta(
+                &sequence_reader_fasta,
+                opt_fasta_target->value.str_val,
+                opt_fasta_query->value.str_val);
+        if (!ok) {
+            LOG_ERROR("Error initializing the sequence reader.");
+            return 1;
+        }
+    } else {
+        LOG_ERROR("Invalid file format.");
+        return 1;
+    }
 
     size_t sequences_read = 0;
     option_t* opt_sequences_read = get_option(options, 'n');
@@ -202,8 +264,15 @@ int main(int argc, char** argv) {
 
     affine_penalties_t penalties = {0};
     // TODO: This is insecure but works for now, parse it better
-    int x, o, e;
-    sscanf(get_option(options, 'g')->value.str_val, "%d,%d,%d", &x, &o, &e);
+    option_t* opt_penalties = get_option(options, 'g');
+    int x = 2; int o = 3; int e = 1;
+    if (opt_penalties->parsed) {
+        int nelems = sscanf(opt_penalties->value.str_val, "%d,%d,%d", &x, &o, &e);
+        if (nelems != 3) {
+            LOG_WARN("Invalid penalties format provided. Using default penalties (0,2,3,1).");
+            x = 2; o = 3; e = 1;
+        }
+    }
 
     if (x < 0) x *= -1;
     if (o < 0) o *= -1;
@@ -219,9 +288,21 @@ int main(int argc, char** argv) {
     CLOCK_INIT()
     CLOCK_START()
 
-    if (!read_n_sequences(&sequence_reader, &sequences_read)) {
-        LOG_ERROR("Error reading file: %s (%s).", sequences_file, strerror(errno));
-        exit(1);
+    if (file_format == SEQ) {
+        if (!read_n_sequences(&sequence_reader, &sequences_read)) {
+            LOG_ERROR("Error reading file: %s.", opt_seq_file->value.str_val);
+            exit(1);
+        }
+    } else if (file_format == FASTA) {
+        if (!read_n_sequences_fasta(&sequence_reader_fasta, &sequences_read)) {
+            LOG_ERROR("Error reading files: %s and %s.",
+                      opt_fasta_target->value.str_val,
+                      opt_fasta_query->value.str_val);
+            exit(1);
+        }
+    } else {
+        LOG_ERROR("Invalid file format.");
+        return 1;
     }
 
     CLOCK_STOP()
@@ -238,8 +319,13 @@ int main(int argc, char** argv) {
     } else {
         // Assume error is about 10% between sequences, alignments that go
         // beyond this error will be offloaded to the CPU
-        max_distance = MAX(sequence_reader.sequences_metadata[0].text_len,
-                           sequence_reader.sequences_metadata[0].pattern_len) * 0.1;
+        if (file_format == SEQ)
+            max_distance = MAX(sequence_reader.sequences_metadata[0].text_len,
+                               sequence_reader.sequences_metadata[0].pattern_len) * 0.1;
+        else if (file_format == FASTA)
+            max_distance = MAX(sequence_reader_fasta.sequences_metadata[0].text_len,
+                               sequence_reader_fasta.sequences_metadata[0].pattern_len) * 0.1;
+
         max_distance *= MAX(x, MAX(o, e));
         if (max_distance > 8000) {
             LOG_WARN("Automatically genereated maximum error supported by the"
@@ -247,6 +333,7 @@ int main(int argc, char** argv) {
                      "memory, consider limiting the maximum error with the "
                      "'-e' argument.");
         }
+        if (max_distance <= 20) max_distance = 20;
         LOG_INFO("No maximum error provided by the user, using %d", max_distance)
     }
 
@@ -270,7 +357,11 @@ int main(int argc, char** argv) {
         else                         threads_per_block = 1024;
     }
 
-    size_t num_alignments = sequence_reader.num_sequences_read / 2;
+    size_t num_alignments;
+    if (file_format == SEQ)
+        num_alignments = sequence_reader.num_sequences_read / 2;
+    else if (file_format == FASTA)
+        num_alignments = sequence_reader_fasta.num_sequences_read / 2;
 
     int batch_size;
     option_t* opt_batch_size = get_option(options, 'b');
@@ -344,21 +435,33 @@ int main(int argc, char** argv) {
     wfa_options.penalties = penalties;
 
     bool compute_cigar = get_option(options, 'x')->parsed;
+    char* sequences_buffer = NULL;
+    size_t sequences_buffer_size = 0;
+    sequence_pair_t* sequences_metadata = NULL;
+    if (file_format == SEQ) {
+        sequences_buffer = sequence_reader.sequences_buffer;
+        sequences_buffer_size = sequence_reader.sequences_buffer_size;
+        sequences_metadata = sequence_reader.sequences_metadata;
+    } else if (file_format == FASTA) {
+        sequences_buffer = sequence_reader_fasta.sequences_buffer;
+        sequences_buffer_size = sequence_reader_fasta.sequences_buffer_size;
+        sequences_metadata = sequence_reader_fasta.sequences_metadata;
+    }
     CLOCK_START()
     if (compute_cigar) {
         launch_alignments(
-            sequence_reader.sequences_buffer,
-            sequence_reader.sequences_buffer_size,
-            sequence_reader.sequences_metadata,
+            sequences_buffer,
+            sequences_buffer_size,
+            sequences_metadata,
             results,
             wfa_options,
             check
         );
     } else {
         launch_alignments_distance(
-            sequence_reader.sequences_buffer,
-            sequence_reader.sequences_buffer_size,
-            sequence_reader.sequences_metadata,
+            sequences_buffer,
+            sequences_buffer_size,
+            sequences_metadata,
             results,
             wfa_options,
             check

@@ -9,9 +9,9 @@ Make sure you have installed an up to date [CUDA toolkit](https://developer.nvid
 To compile the library and tools, run the following commands:
 
 ```
-$ git clone git@github.com:quim0/WFA-GPU.git
-$ cd WFA-GPU
-$ ./build.sh
+git clone git@github.com:quim0/WFA-GPU.git && \
+cd WFA-GPU && \
+./build.sh
 ```
 
 The `build.sh` script notifies if there is any missing necessary software for compiling the library and the tools.
@@ -19,30 +19,42 @@ The `build.sh` script notifies if there is any missing necessary software for co
 ## Tools
 
 WFA-GPU comes with a tool to test its functionality, it is compiled (with the instruction on section "Build") to the `bin/wfa.affine.gpu` binary.
+
+Some usage examples are the following, note that depending on the amount of
+memory available on the GPU, batch size may be increased or decreased:
+* `.seq` file, banded: `./bin/wfa.affine.gpu -i PacBioHiFi.seq -b 100000 -e 3000 -t 512 -x -B auto -o hifi.out`
+* `.seq` file, exact: `./bin/wfa.affine.gpu -i PacBioHiFi.seq -b 100000 -e 3000 -t 512 -x -o hifi.out`
+* `.fasta` files, exact: `./bin/wfa.affine.gpu -Q query.PacBioHiFi.fasta -T target.PacBioHiFi.fasta -b 100000 -e 3000 -t 512 -x -o hifi.out`
+
 Running the binary without any arguments lists the help menu:
 
 ```
 [Input/Output]
-        -i, --input-file                    (string, required) Input sequences file: File containing the sequences to align.
+        -i, --input-seq                     (string) Input sequences file in .seq format: File containing the sequences to align in .seq format.
+        -Q, --input-fasta-query             (string) Input query file in .fasta format: File containing the query sequences to align (if not using a .seq file).
+        -T, --input-fasta-target            (string) Input target file in .fasta format: File containing the target sequences to align (if not using a .seq file).
         -n, --num-alignments                (int) Number of alignments: Number of alignments to read from the file (default=all alignments)
         -o, --output-file                   (string) Output File: File where alignment output is saved.
         -p, --print-output                  Print: Print output to stderr
         -O, --output-verbose                Verbose output: Add the query/target information on the output
 [Alignment Options]
-        -g, --affine-penalties              (string, required) Affine penalties: Gap-affine penalties for the alignment, in format x,o,e
+        -g, --affine-penalties              (string) Affine penalties: Gap-affine penalties for the alignment, in format x,o,e
         -x, --compute-cigar                 Compute CIGAR: Compute the optimal alignment path (CIGAR) of all the alignments, otherwise, only the distance is computed.
         -e, --max-distance                  (int) Maximum error allowed: Maximum error that the kernel will be able to compute (default = maximum possible error of first alignment)
         -b, --batch-size                    (int) Batch size: Number of alignments per batch.
-        -B, --band                          (int) Banded execution: If this parameter is present, a banded approach is used (heuristic).
-                                                  The parameter tells how many steps to wait until the band is re-centered. Use "auto" to
-                                                  use an automatically generated band.
+        -B, --band                          (int) Banded execution: If this parameter is present, a banded approach is used (heuristic).The parameter tells how many steps to wait until the band is re-centered. Use "auto" to use an automatically generated band.
 [System]
         -c, --check                         Check: Check for alignment correctness
         -t, --threads-per-block             (int) Number of CUDA threads per alginment: Number of CUDA threads per block, each block computes one or multiple alignment
         -w, --workers                       (int) GPU workers: Number of blocks ('workers') to be running on the GPU.
+[Examples]
+        ./bin/wfa.affine.gpu -i sequences.seq -b <batch_size> -o scores.out
+        ./bin/wfa.affine.gpu -i sequences.seq -b <batch_size> -B auto -o scores-banded.out
+        ./bin/wfa.affine.gpu -Q queries.fasta -T targets.fasta -b <batch_size> -o scores.out
+        ./bin/wfa.affine.gpu -Q queries.fasta -T targets.fasta -b <batch_size> -x -o cigars.out
 ```
 
-Choosing the correct alignment and system options is key for performance. The binary tries to automatically choose adequate paramters, but the user
+Choosing the correct alignment and system options is key for performance. The tool tries to automatically choose adequate paramters, but the user
 may have additional information to make a better choise. It is specially important to limit the maximum error supported by the kernel as much as
 possible (`-e` parameter), this contrains the memory used per alignment, and helps the program to choose better block and grid sizes. Keep in mind that any alignment having an error higher than the specified with the `-e` argument will be computed on the CPU, so, if this argument is too small, performance can decrease.
 
@@ -118,4 +130,4 @@ WFA-GPU is distributed under the MIT licence.
 
 ## Citation
 
-Quim Aguado-Puig, Santiago Marco-Sola, Juan Carlos Moure, Christos Matzoros, David Castells-Rufas, Antonio Espinosa, Miquel Moreto. WFA-GPU: Gap-affine pairwise alignment using GPUs. bioRxiv (2022). DOI [2022.04.18.488374](https://doi.org/10.1101/2022.04.18.488374)
+Quim Aguado-Puig, Max Doblas, Christos Matzoros, Antonio Espinosa, Juan Carlos Moure, Santiago Marco-Sola,  Miquel Moreto. WFA-GPU: Gap-affine pairwise alignment using GPUs. bioRxiv (2022). DOI [2022.04.18.488374](https://doi.org/10.1101/2022.04.18.488374)

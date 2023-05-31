@@ -26,9 +26,9 @@
 #include "stdlib.h"
 
 // The maximum sequence length is determined by the size of the offset, in this
-// case a signed 16-bit integer (so 2^15 useful bits, a values <0 are considered
-// NULL)
-static const size_t MAX_SEQ_LEN = (1 << 15);
+// case a signed 16-bit integer (so 2^15 useful bits, as values <0 are
+// considered NULL)
+#define MAX_SEQ_LEN (1UL << 15)
 typedef int16_t wfa_offset_t;
 
 #define wfa_backtrace_bits 32

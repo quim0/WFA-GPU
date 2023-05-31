@@ -38,13 +38,16 @@
 
 #endif // DEBUG
 
-#define LOG_ERROR(...) fprintf(stderr, __VA_ARGS__); fprintf(stderr, "\n");
+#define LOG_ERROR(...) {\
+    char tmp[1024];\
+    snprintf(tmp, 1024, __VA_ARGS__); \
+    fprintf(stderr, "[!] ERROR: %s (%s:%d)\n", tmp, __FILE__, __LINE__); \
+    }
 #define LOG_INFO(...) {\
     char tmp[1024];\
     snprintf(tmp, 1024, __VA_ARGS__); \
     fprintf(stderr, "INFO: %s (%s:%d)\n", tmp, __FILE__, __LINE__); \
     }
-
 #define LOG_WARN(...) {\
     char tmp[1024];\
     snprintf(tmp, 1024, __VA_ARGS__); \

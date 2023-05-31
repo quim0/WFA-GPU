@@ -137,14 +137,17 @@ bool parse_args (const int argc, char** argv, options_t options) {
     }
 
     // Check if all required arguments have been parsed
+    int parsed_options = 0;
     for (int i=0; i<options.len; i++) {
         option_t curr_option = options.options[i];
+        if (curr_option.parsed) parsed_options++;
         if (curr_option.required && !curr_option.parsed) {
             fprintf(stderr,
                     "Missing required parameter \"%s\"\n", curr_option.long_arg);
             return false;
         }
     }
+    if (parsed_options == 0) return false;
     return true;
 }
 

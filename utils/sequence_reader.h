@@ -38,12 +38,22 @@ typedef struct {
     size_t num_sequences_read;
 } sequence_reader_t;
 
-bool grow_sequence_buffer (sequence_reader_t* reader);
-bool grow_metadata_array (sequence_reader_t* reader);
+typedef struct {
+    FILE* fp_target;
+    FILE* fp_query;
+    char* sequences_buffer;
+    size_t sequences_buffer_size;
+    sequence_pair_t* sequences_metadata;
+    size_t sequences_metadata_size;
+    size_t num_sequences_read;
+} sequence_reader_fasta_t;
+
 bool init_sequence_reader (sequence_reader_t* reader, char* seq_file);
+bool init_sequence_reader_fasta (sequence_reader_fasta_t* reader, char* seq_file_target, char* seq_file_query);
 // Reads at most n sequences, if n=0, read all file. N will be updated with the
 // real number of sequences read.
 bool read_n_sequences (sequence_reader_t* reader, size_t* n);
+bool read_n_sequences_fasta (sequence_reader_fasta_t* reader, size_t* n);
 void destroy_reader (sequence_reader_t* reader);
 
 #endif
