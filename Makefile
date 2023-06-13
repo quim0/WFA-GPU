@@ -10,11 +10,11 @@ SRC_WFA_CPU=utils/wfa_cpu.c
 ARGS=-I . -Ilib/
 ARGS_ALIGNER=-Wall -Wno-unused-function -Lbuild/ -L/usr/local/cuda/lib64 $(ARGS)
 ARGS_WFA_CPU=-Lexternal/WFA/lib/ $(ARGS) -Iexternal/WFA/ -lwfa
-NVCC_OPTIONS=-O3 -maxrregcount=64 -gencode arch=compute_$(COMPUTE),code=sm_$(SM) -Xptxas -v -Xcompiler -fopenmp
+NVCC_OPTIONS=-O3 -maxrregcount=64 -gencode arch=compute_$(COMPUTE),code=sm_$(SM) -Xptxas -v# -Xcompiler -fopenmp
 
 aligner: wfa-cpu wfa-gpu-so $(SRC_ALIGNER)
 	mkdir -p bin
-	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -Lexternal/WFA/lib/ -O3 -o bin/wfa.affine.gpu -lwfagpu -lwfa -lm -Wl,-rpath=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))/build/
+	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -Lexternal/WFA/lib/ -O3 -o bin/wfa.affine.gpu -lwfagpu -lwfa -lm -Wl,-rpath=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))/build/ -fopenmp
 
 aligner-debug: wfa-cpu wfa-gpu-debug-so $(SRC_ALIGNER)
 	mkdir -p bin
