@@ -33,7 +33,7 @@
 #ifndef VECTOR_H_
 #define VECTOR_H_
 
-#include "commons.h"
+#include <stdint.h>
 
 /*
  * Checkers

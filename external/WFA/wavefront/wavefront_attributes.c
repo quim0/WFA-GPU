@@ -29,6 +29,7 @@
  * DESCRIPTION: WaveFront aligner data structure attributes
  */
 
+#include "utils/commons.h"
 #include "wavefront_attributes.h"
 
 /*
@@ -44,7 +45,6 @@ wavefront_aligner_attr_t wavefront_aligner_attr_default = {
         .pattern_end_free = 0,
         .text_begin_free = 0,
         .text_end_free = 0,
-        .max_alignment_score = INT_MAX, // Unlimited
     },
     // Custom matching functions
     .match_funct = NULL,           // Use default match-compare function
@@ -74,28 +74,29 @@ wavefront_aligner_attr_t wavefront_aligner_attr_default = {
         .strategy = wf_heuristic_wfadaptive,
         .min_wavefront_length = 10,
         .max_distance_threshold = 50,
+        .steps_between_cutoffs = 1,
     },
     // Memory model
     .memory_mode = wavefront_memory_high,
     // MM
     .mm_allocator = NULL, // Use private MM
     // Display
-    .plot_params = {
-        .plot_enabled = false,
+    .plot = {
+        .enabled = false,
         .resolution_points = 2000,
-        .min_v = -1,
-        .max_v = -1,
-        .min_h = -1,
-        .max_h = -1,
+        .align_level = 0,
     },
     // System
     .system = {
-        .check_alignment_correct = false,
-        .probe_interval_global = 2000,
+        .max_alignment_score = INT_MAX, // Unlimited
+        .probe_interval_global = 3000,
         .probe_interval_compact = 6000,
         .max_memory_compact = -1,  // Automatically set based on memory-mode
         .max_memory_resident = -1, // Automatically set based on memory-mode
         .max_memory_abort = UINT64_MAX, // Unlimited
         .verbose = 0, // Quiet
+        .check_alignment_correct = false,
+        .max_num_threads = 1,           // Single thread by default
+        .min_offsets_per_thread = 500   // Minimum WF-length to spawn a thread
     },
 };

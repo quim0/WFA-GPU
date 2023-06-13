@@ -29,6 +29,7 @@
  * DESCRIPTION: WaveFront aligner components
  */
 
+#include "utils/commons.h"
 #include "wavefront_components.h"
 #include "utils/bitmap.h"
 #include "system/profiler_timer.h"
@@ -55,12 +56,12 @@ void wavefront_components_dimensions_edit(
   if (wf_components->memory_modular) {
     *num_wavefronts = 2;
   } else {
-    *num_wavefronts = MAX(max_pattern_length,max_text_length);
+    *num_wavefronts = MAX(max_pattern_length,max_text_length) + 1;
   }
 }
 void wavefront_components_dimensions_linear(
     wavefront_components_t* const wf_components,
-    wavefronts_penalties_t* const penalties,
+    wavefront_penalties_t* const penalties,
     const int max_pattern_length,
     const int max_text_length,
     int* const max_score_scope,
@@ -74,12 +75,12 @@ void wavefront_components_dimensions_linear(
     const int abs_seq_diff = ABS(max_pattern_length-max_text_length);
     const int max_score_misms = MIN(max_pattern_length,max_text_length) * penalties->mismatch;
     const int max_score_indel = penalties->gap_opening1 * abs_seq_diff;
-    *num_wavefronts = max_score_misms + max_score_indel;
+    *num_wavefronts = max_score_misms + max_score_indel + 1;
   }
 }
 void wavefront_components_dimensions_affine(
     wavefront_components_t* const wf_components,
-    wavefronts_penalties_t* const penalties,
+    wavefront_penalties_t* const penalties,
     const int max_pattern_length,
     const int max_text_length,
     int* const max_score_scope,
@@ -94,12 +95,12 @@ void wavefront_components_dimensions_affine(
     const int abs_seq_diff = ABS(max_pattern_length-max_text_length);
     const int max_score_misms = MIN(max_pattern_length,max_text_length) * penalties->mismatch;
     const int max_score_indel = penalties->gap_opening1 + abs_seq_diff * penalties->gap_extension1;
-    *num_wavefronts = max_score_misms + max_score_indel;
+    *num_wavefronts = max_score_misms + max_score_indel + 1;
   }
 }
 void wavefront_components_dimensions_affine2p(
     wavefront_components_t* const wf_components,
-    wavefronts_penalties_t* const penalties,
+    wavefront_penalties_t* const penalties,
     const int max_pattern_length,
     const int max_text_length,
     int* const max_score_scope,
@@ -118,12 +119,12 @@ void wavefront_components_dimensions_affine2p(
     const int max_score_indel1 = penalties->gap_opening1 + abs_seq_diff * penalties->gap_extension1;
     const int max_score_indel2 = penalties->gap_opening2 + abs_seq_diff * penalties->gap_extension2;
     const int max_score_indel = MIN(max_score_indel1,max_score_indel2);
-    *num_wavefronts = max_score_misms + max_score_indel;
+    *num_wavefronts = max_score_misms + max_score_indel + 1;
   }
 }
 void wavefront_components_dimensions(
     wavefront_components_t* const wf_components,
-    wavefronts_penalties_t* const penalties,
+    wavefront_penalties_t* const penalties,
     const int max_pattern_length,
     const int max_text_length,
     int* const max_score_scope,
@@ -195,7 +196,7 @@ void wavefront_components_allocate(
     wavefront_components_t* const wf_components,
     const int max_pattern_length,
     const int max_text_length,
-    wavefronts_penalties_t* const penalties,
+    wavefront_penalties_t* const penalties,
     const bool memory_modular,
     const bool bt_piggyback,
     mm_allocator_t* const mm_allocator) {
@@ -279,7 +280,7 @@ void wavefront_components_resize(
     wavefront_components_t* const wf_components,
     const int max_pattern_length,
     const int max_text_length,
-    wavefronts_penalties_t* const penalties) {
+    wavefront_penalties_t* const penalties) {
   // Compute dimensions
   int num_wavefronts = 0;
   wavefront_components_dimensions(
@@ -308,8 +309,9 @@ void wavefront_components_resize_null__victim(
     // Parameters
     mm_allocator_t* const mm_allocator = wf_components->mm_allocator;
     // Expand and leave some leeway
-    const int proposed_lo = ((lo-1)*3)/2;
-    const int proposed_hi = ((hi+1)*3)/2;
+    const int wf_inc = (WAVEFRONT_LENGTH(lo,hi)*3)/2;
+    const int proposed_lo = lo - wf_inc/2;
+    const int proposed_hi = hi + wf_inc/2;
     const int proposed_wavefront_length = WAVEFRONT_LENGTH(proposed_lo,proposed_hi);
     // Reallocate victim wavefront
     wavefront_resize(wf_components->wavefront_victim,proposed_wavefront_length,mm_allocator);
@@ -430,10 +432,10 @@ void wavefront_components_translate_wavefronts(
 void wavefront_components_compact_bt_buffer(
     wavefront_components_t* const wf_components,
     const int score,
-    const bool verbose) {
+    const int verbose) {
   // PROFILE
   profiler_timer_t timer;
-  if (verbose) { timer_reset(&timer); timer_start(&timer); }
+  if (verbose >= 3) { timer_reset(&timer); timer_start(&timer); }
   // Parameters
   wf_backtrace_buffer_t* const bt_buffer = wf_components->bt_buffer;
   const uint64_t bt_buffer_used = wf_backtrace_buffer_get_used(bt_buffer);
@@ -451,11 +453,10 @@ void wavefront_components_compact_bt_buffer(
   // Free
   bitmap_delete(bitmap);
   // PROFILE
-  if (verbose) {
+  if (verbose >= 3) {
     timer_stop(&timer);
     fprintf(stderr,"[");
     timer_print_total(stderr,&timer);
     fprintf(stderr,"]\n");
   }
 }
-

@@ -19,6 +19,7 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
+#include <string.h>
 #include "utils/wfa_cpu.h"
 #include "utils/logger.h"
 #include "utils/cigar.h"
@@ -66,11 +67,11 @@ int compute_alignments_cpu_threaded (const int batch_size,
             size_t plen = sequences_metadata[real_i].pattern_len;
 
             wavefront_align(wf_aligner, pattern, plen, text, tlen);
-            const int score = wf_aligner->cigar.score;
+            const int score = wf_aligner->cigar->score;
 
             results[i].distance = -score;
             alignment_results[real_i].error = -score;
-            uint32_t cigar_len = wf_aligner->cigar.end_offset - wf_aligner->cigar.begin_offset;
+            uint32_t cigar_len = wf_aligner->cigar->end_offset - wf_aligner->cigar->begin_offset;
             if (cigar_len >= alignment_results[real_i].cigar.buffer_size) {
                 alignment_results[real_i].cigar.buffer = realloc(alignment_results[real_i].cigar.buffer, cigar_len + 1);
                 if (alignment_results[real_i].cigar.buffer == NULL) {
@@ -78,7 +79,7 @@ int compute_alignments_cpu_threaded (const int batch_size,
                     exit(-1);
                 }
             }
-            cigar_sprint(alignment_results[real_i].cigar.buffer, &wf_aligner->cigar, true);
+            cigar_sprint(alignment_results[real_i].cigar.buffer, wf_aligner->cigar, true);
             alignments_computed_cpu++;
         }
     }
@@ -148,7 +149,7 @@ int compute_distance_cpu_threaded (const int batch_size,
             size_t plen = sequences_metadata[real_i].pattern_len;
 
             wavefront_align(wf_aligner, pattern, plen, text, tlen);
-            const int score = wf_aligner->cigar.score;
+            const int score = wf_aligner->cigar->score;
 
             results[i].distance = -score;
             alignment_results[real_i].error = -score;
@@ -179,7 +180,7 @@ int compute_alignment_cpu (const char* const pattern, const char* const text,
     );
 
     wavefront_align(wf_aligner, pattern, plen, text, tlen);
-    const int score = wf_aligner->cigar.score;
+    const int score = wf_aligner->cigar->score;
 
     wavefront_aligner_delete(wf_aligner);
     // WFA cpu library returns "cost" that is negative, as GPU library use
@@ -207,7 +208,7 @@ void pprint_cigar_cpu (const char* const pattern, const char* const text,
 
     cigar_print_pretty(stdout,
       pattern,strlen(pattern),text,strlen(text),
-      &wf_aligner->cigar,wf_aligner->mm_allocator);
+      wf_aligner->cigar,wf_aligner->mm_allocator);
 
     wavefront_aligner_delete(wf_aligner);
 }
