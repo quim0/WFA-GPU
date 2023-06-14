@@ -228,10 +228,6 @@ __global__ void distance_kernel_aband (
     int offsets_size = active_working_set_size * max_wf_size;
     offsets_size = offsets_size + (4 - (offsets_size % 4));
 
-    const size_t wf_data_buffer_size = (offsets_size * 3 * sizeof(wfa_offset_t));
-    uint8_t* curr_alignment_wf_data_buffer = wf_data_buffer
-                                             + (wf_data_buffer_size * blockIdx.x);
-
     // Wavefronts structres reside in shared
     wfa_distance_aband_wavefront_t* M_wavefronts = (wfa_distance_aband_wavefront_t*)sh_mem;
     wfa_distance_aband_wavefront_t* I_wavefronts = (M_wavefronts + active_working_set_size);
