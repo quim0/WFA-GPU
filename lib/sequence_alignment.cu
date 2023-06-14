@@ -88,6 +88,7 @@ size_t available_shared_mem_per_block (const affine_penalties_t penalties,
     CUDA_CHECK_ERR
 
     const size_t shared_mem_per_block = deviceProp.sharedMemPerBlock;
+    const size_t shared_mem_per_multiprocessor = deviceProp.sharedMemPerMultiprocessor;
     const int max_occupancy = deviceProp.maxThreadsPerMultiProcessor / deviceProp.warpSize;
 
     // Assume we get an occupancy of 32 warps per SM, with the limiting factor
@@ -96,9 +97,11 @@ size_t available_shared_mem_per_block (const affine_penalties_t penalties,
 
     const int warps_per_block = threads_per_block / deviceProp.warpSize;
     const int blocks_per_sm = max_active_warps_per_sm / warps_per_block;
-    const size_t usable_sh_mem_per_block = shared_mem_per_block / blocks_per_sm;
+    const size_t usable_sh_mem_per_block = min(shared_mem_per_multiprocessor / blocks_per_sm,
+                                               shared_mem_per_block);
 
-    LOG_DEBUG("Maximum usable shared memory per block: %.2fKiB. Maximum shared memory per block=%.2fKiB",
+    LOG_DEBUG("Maximum usable shared memory per multiprocessor: %.2fKiB. Maximum usable shared memory per block: %.2fKiB. Maximum shared memory per block=%.2fKiB",
+              (double)shared_mem_per_multiprocessor/ (1<<10),
               (double)usable_sh_mem_per_block / (1<<10),
               (double)shared_mem_per_block / (1<<10))
     return usable_sh_mem_per_block;
