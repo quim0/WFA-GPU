@@ -43,5 +43,24 @@ if [ -z "$GCC" ]; then
 fi
 echo "Detected gcc: $GCC"
 
+# Check if the compute capability of the GPU is supported by the CUDA version
+# installed
+output=$(nvcc --run -arch=compute_$MAJOR_CAP$MINOR_CAP -code=sm_$MAJOR_CAP$MINOR_CAP 2>&1)
+
+if [[ $output == *"compute"* ]]; then
+    if [ $MINOR_CAP -ne 0 ]; then
+        echo "Compute capability $MAJOR_CAP.$MINOR_CAP is NOT supported.  Downgrading to $MAJOR_CAP.0"
+        MINOR_CAP=0
+        output=$(nvcc --run -arch=compute_$MAJOR_CAP$MINOR_CAP -code=sm_$MAJOR_CAP$MINOR_CAP 2>&1)
+        if [[ $output == *"compute"* ]]; then
+            echo "ERROR: Your CUDA version do not support the compute capability of your GPU ($MAJOR_CAP.$MINOR_CAP), please update CUDA."
+            exit
+        fi
+    else
+        echo "ERROR: Your CUDA version do not support the compute capability of your GPU ($MAJOR_CAP.$MINOR_CAP), please update CUDA."
+        exit
+    fi
+fi
+
 # Build
 make CC=$GCC NVCC=$NVCC SM=$MAJOR_CAP$MINOR_CAP clean aligner
