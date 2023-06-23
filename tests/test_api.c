@@ -27,6 +27,35 @@
 
 SET_TEST_NAME("ALIGNMENT API")
 
+void test_sequences_invalid_aligner_pointer () {
+    bool ok = wfagpu_initialize_aligner(NULL);
+    TEST_ASSERT(!ok);
+
+    ok = wfagpu_add_sequences(NULL, sequences_10K_n100[0], sequences_10K_n100[1]);
+    TEST_ASSERT(!ok);
+
+    affine_penalties_t penalties;
+    ok = wfagpu_initialize_parameters(NULL, penalties);
+}
+
+void test_sequences_invalid_penalties () {
+    wfagpu_aligner_t aligner = {0};
+    wfagpu_initialize_aligner(&aligner);
+    for (int j=0; j<10; j++) {
+        for (int i=0; i<200; i+=2) {
+            wfagpu_add_sequences(&aligner, sequences_10K_n100[i], sequences_10K_n100[i+1]);
+        }
+    }
+
+    affine_penalties_t penalties = {.x = -2, .o = 3, .e = 1};
+    bool ok = wfagpu_initialize_parameters(&aligner, penalties);
+    TEST_ASSERT(!ok);
+
+    penalties.x = 0; penalties.o = 0; penalties.e = 0;
+    ok = wfagpu_initialize_parameters(&aligner, penalties);
+    TEST_ASSERT(!ok);
+}
+
 void test_sequences_10k_single_batch_x2_o3_e1 () {
     // 10K 10% error
     wfagpu_aligner_t aligner = {0};
@@ -190,6 +219,8 @@ void test_sequences_1000_multi_batch_x5_o3_e2 () {
 }
 
 int main () {
+    test_sequences_invalid_aligner_pointer();
+    test_sequences_invalid_penalties();
     test_sequences_10k_single_batch_x2_o3_e1();
     test_sequences_10k_multi_batch_x2_o3_e1();
     test_sequences_10k_multi_batch_x3_o5_e2();
