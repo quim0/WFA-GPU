@@ -18,11 +18,11 @@ aligner: wfa-cpu wfa-gpu-so $(SRC_ALIGNER)
 
 aligner-debug: wfa-cpu wfa-gpu-debug-so $(SRC_ALIGNER)
 	mkdir -p bin
-	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -ggdb -DDEBUG -Lexternal/WFA/lib/ -o bin/wfa.affine.gpu -lwfagpu -lwfa -lm
+	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -ggdb -DDEBUG -Lexternal/WFA/lib/ -o bin/wfa.affine.gpu -lwfagpu -lwfa -lm -fopenmp
 
 aligner-profile: wfa-cpu wfa-gpu-profile-so $(SRC_ALIGNER)
 	mkdir -p bin
-	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -Lexternal/WFA/lib/ -o bin/wfa.affine.gpu -lwfagpu -lwfa -lm
+	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -Lexternal/WFA/lib/ -o bin/wfa.affine.gpu -lwfagpu -lwfa -lm -fopenmp
 
 run-tests:
 	for f in bin/test-*; do ./$$f; done
