@@ -189,6 +189,16 @@ bool wfagpu_initialize_parameters (wfagpu_aligner_t* aligner,
         LOG_ERROR("Invalid aligner.");
         return false;
     }
+
+    if (penalties.x < 0 || penalties.o < 0 || penalties.e < 0) {
+        LOG_ERROR("Penalties must be >= 0.");
+        return false;
+    }
+    if (penalties.x == 0 && penalties.o == 0 && penalties.e == 0) {
+        LOG_ERROR("All penalties can not be 0.");
+        return false;
+    }
+
     wfagpu_set_default_options(&(aligner->alignment_options),
                                aligner->sequences_metadata,
                                penalties,
