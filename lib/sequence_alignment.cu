@@ -182,6 +182,7 @@ void reset_wf_data_buffer_d (uint8_t* wf_data_buffer,
                              const size_t num_blocks,
                              cudaStream_t stream) {
 
+    if (wf_data_buffer == NULL) return;
     // Create the active working set buffer on global memory
     size_t buffer_size = wf_data_buffer_size(penalties, max_steps);
     buffer_size *= num_blocks;
@@ -197,6 +198,7 @@ void reset_wf_data_buffer_distance_d (uint8_t* wf_data_buffer,
                                       const size_t num_blocks,
                                       cudaStream_t stream) {
 
+    if (wf_data_buffer == NULL) return;
     // Create the active working set buffer on global memory
     size_t buffer_size = wf_data_buffer_size_distance(penalties, max_steps);
     buffer_size *= num_blocks;
@@ -268,7 +270,7 @@ void launch_alignments_async (const char* packed_sequences_buffer,
     if (band > 0) {
         // TODO: When reducing threads per block re-ca
         if (max_sh_offsets_per_wf < (threads_per_block)) {
-            LOG_ERROR("TODO: Less offsets than threads!!");
+            LOG_ERROR("There is not enough shared memory for this configuration.  Aborting.");
             exit(-1);
         } else if (max_sh_offsets_per_wf > (threads_per_block)) {
             max_sh_offsets_per_wf = threads_per_block;
@@ -409,11 +411,19 @@ void launch_alignments_distance_async (const char* packed_sequences_buffer,
 
     LOG_DEBUG("Each wavefront have %d offsets on shared memory", max_sh_offsets_per_wf)
 
-    uint32_t* next_alignment_idx = (uint32_t*)(wf_data_buffer
-                                           + wf_data_buffer_size_distance(
-                                               penalties,
-                                               max_steps
-                                           ) * num_blocks);
+    uint32_t* next_alignment_idx;
+
+    if (band <= 0) {
+        next_alignment_idx = (uint32_t*)(wf_data_buffer
+                                               + wf_data_buffer_size_distance(
+                                                   penalties,
+                                                   max_steps
+                                               ) * num_blocks);
+    } else {
+        next_alignment_idx = (uint32_t*)wf_data_buffer;
+
+    }
+
     dim3 gridSize(num_blocks);
     dim3 blockSize(threads_per_block);
 

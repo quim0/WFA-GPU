@@ -588,15 +588,17 @@ void launch_alignments_distance (char* sequences_buffer,
     cudaMalloc(&results_d, batch_size * sizeof(alignment_result_t));
     CUDA_CHECK_ERR
 
-    uint8_t* wf_data_buffer;
-    allocate_wf_data_buffer_distance_d(&wf_data_buffer, max_distance,
-                              penalties, num_blocks);
+    uint8_t* wf_data_buffer = NULL;
+    if (band <= 0) {
+        // The banded strategy uses only shared memory, so there is no need to
+        // allocate the WF buffers in global memory
+        allocate_wf_data_buffer_distance_d(&wf_data_buffer, max_distance,
+                                  penalties, num_blocks);
+    } else {
+        // Make just a small allocation for the "next_alignment_idx"
+        allocate_wf_data_buffer_distance_d(&wf_data_buffer, 1, penalties, 1);
+    }
 
-    uint32_t* next_alignment_idx_d = (uint32_t*)(wf_data_buffer +
-                                     wf_data_buffer_size_distance(
-                                         penalties,
-                                         max_distance)
-                                     );
 
     size_t available_sh_mem_per_block = available_shared_mem_per_block(
             penalties,
@@ -622,8 +624,13 @@ void launch_alignments_distance (char* sequences_buffer,
         CUDA_CHECK_ERR
 
         // Reset the memory regions for the alignment kernel
-        reset_wf_data_buffer_distance_d(wf_data_buffer, max_distance,
-                                        penalties, num_blocks, stream2);
+        if (band <= 0) {
+            reset_wf_data_buffer_distance_d(wf_data_buffer, max_distance,
+                                            penalties, num_blocks, stream2);
+        } else {
+            reset_wf_data_buffer_distance_d(wf_data_buffer, 1,
+                                            penalties, 1, stream2);
+        }
 
         // Wait for unpacked sequences memcpys to finish
         cudaStreamSynchronize(stream1);
