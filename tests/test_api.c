@@ -21,8 +21,8 @@
 
 #include "include/wfa_gpu.h"
 
-#include "sequences_10K.h"
-#include "sequences_1000.h"
+#include "data/sequences_10K.h"
+#include "data/sequences_1000.h"
 #include "test.h"
 
 SET_TEST_NAME("ALIGNMENT API")

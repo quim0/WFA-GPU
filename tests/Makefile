@@ -18,4 +18,4 @@ run-tests:
 	for f in ./test-*; do LD_LIBRARY_PATH=../build/ ./$$f; done
 
 clean:
-	rm -f test-*
+	rm -f test-api test-packing
