@@ -86,7 +86,7 @@ int compute_alignments_cpu_threaded (const int batch_size,
     wavefront_aligner_delete(wf_aligner);
 
     #pragma omp for schedule(static)
-    for (int i=from; i<=from+batch_size; i++) {
+    for (int i=from; i<from+batch_size; i++) {
         if (!results[i-from].finished) continue;
         size_t toffset = sequences_metadata[i].text_offset;
         size_t poffset = sequences_metadata[i].pattern_offset;
