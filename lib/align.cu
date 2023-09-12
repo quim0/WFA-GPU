@@ -249,7 +249,7 @@ void launch_alignments (char* sequences_buffer,
                     );
 
             if (alignments_computed_cpu > 0) {
-                LOG_INFO("(Batch %d) %d/%d alignemnts could not be computed on the"
+                LOG_DEBUG("(Batch %d) %d/%d alignemnts could not be computed on the"
                          " GPU and where offloaded to the CPU.",
                          batch-1, alignments_computed_cpu, prev_curr_batch_size)
             }
@@ -320,7 +320,7 @@ void launch_alignments (char* sequences_buffer,
 
                 avg_distance /= prev_curr_batch_size;
                 CLOCK_STOP()
-                LOG_INFO("(Batch %d) correct=%d Incorrect=%d Average score=%f (%.3f"
+                LOG_DEBUG("(Batch %d) correct=%d Incorrect=%d Average score=%f (%.3f"
                          " alignments per second checked)\n", batch-1, correct,
                          incorrect, avg_distance, prev_curr_batch_size/ CLOCK_SECONDS);
             }
@@ -401,7 +401,7 @@ void launch_alignments (char* sequences_buffer,
             );
 
     if (alignments_computed_cpu > 0) {
-        LOG_INFO("(Batch %d) %d/%d alignemnts could not be computed on the"
+        LOG_DEBUG("(Batch %d) %d/%d alignemnts could not be computed on the"
                  " GPU and where offloaded to the CPU.",
                  batch, alignments_computed_cpu, curr_batch_size)
     }
@@ -460,7 +460,7 @@ void launch_alignments (char* sequences_buffer,
 
         avg_distance /= curr_batch_size;
         CLOCK_STOP()
-        LOG_INFO("(Batch %d) correct=%d Incorrect=%d Average score=%f (%.3f"
+        LOG_DEBUG("(Batch %d) correct=%d Incorrect=%d Average score=%f (%.3f"
                  " alignments per second checked)\n", batch, correct,
                  incorrect, avg_distance, curr_batch_size/ CLOCK_SECONDS);
     }
@@ -679,7 +679,7 @@ void launch_alignments_distance (char* sequences_buffer,
                     );
 
             if (alignments_computed_cpu > 0) {
-                LOG_INFO("(Batch %d) %d/%d alignemnts could not be computed on the"
+                LOG_DEBUG("(Batch %d) %d/%d alignemnts could not be computed on the"
                          " GPU and where offloaded to the CPU.",
                          batch-1, alignments_computed_cpu, prev_curr_batch_size)
             }
@@ -809,7 +809,7 @@ void launch_alignments_distance (char* sequences_buffer,
             );
 
     if (alignments_computed_cpu > 0) {
-        LOG_INFO("(Batch %d) %d/%d alignemnts could not be computed on the"
+        LOG_DEBUG("(Batch %d) %d/%d alignemnts could not be computed on the"
                  " GPU and where offloaded to the CPU.",
                  batch, alignments_computed_cpu, curr_batch_size)
     }
