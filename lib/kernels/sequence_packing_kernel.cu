@@ -22,6 +22,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include "kernels/sequence_packing_kernel.cuh"
+#include "wfa_types.h"
 
 // Encode one sequence from 8 to 2 bits
 __global__ void compact_sequences (const char* const sequences_in,
@@ -50,6 +51,14 @@ __global__ void compact_sequences (const char* const sequences_in,
     const int seq_buffer_len = sequence_unpacked_length
                                + (4 - (sequence_unpacked_length % 4));
     // Each thread packs 4 bytes into 1 byte.
+    constexpr uint32_t max_seq_len = 1 << ((sizeof(wfa_offset_t) * 8) - 1);
+    if (sequence_unpacked_length >= max_seq_len) {
+        if (threadIdx.x == 0) {
+            curr_alignment->has_N = true;
+        }
+        return;
+    }
+
     for (int i=threadIdx.x; i<(seq_buffer_len/4); i += blockDim.x) {
         if (curr_alignment->has_N) break;
         uint32_t bases = *((uint32_t*)(sequence_unpacked + i*4));
