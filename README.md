@@ -1,11 +1,11 @@
 # WFA-GPU
 
-WFA-GPU is a CUDA library to perform pairwise gap-affine global DNA sequence alignment on Nvidia GPUs.
+WFA-GPU is a CUDA library for pairwise gap-affine global DNA sequence alignment on Nvidia GPUs.
 It implements the [WFA algorithm](https://academic.oup.com/bioinformatics/article/37/4/456/5904262)
 
 ## Build
 
-Make sure you have installed an up to date [CUDA toolkit](https://developer.nvidia.com/cuda-downloads), and a CUDA capable device (i.e. an NVidia GPU).
+Make sure you have installed an up-to-date [CUDA toolkit](https://developer.nvidia.com/cuda-downloads), and a CUDA-capable device (i.e. an NVidia GPU).
 To compile the library and tools, run the following commands:
 
 ```
@@ -18,7 +18,7 @@ The `build.sh` script notifies if there is any missing necessary software for co
 
 ## Tools
 
-WFA-GPU comes with a tool to test its functionality, it is compiled (with the instruction on section "Build") to the `bin/wfa.affine.gpu` binary.
+WFA-GPU comes with a tool to test its functionality, it is compiled (with the instruction in the section "Build") to the `bin/wfa.affine.gpu` binary.
 
 Some usage examples are the following, note that depending on the amount of
 memory available on the GPU, batch size may be increased or decreased:
@@ -54,16 +54,16 @@ Running the binary without any arguments lists the help menu:
         ./bin/wfa.affine.gpu -Q queries.fasta -T targets.fasta -b <batch_size> -x -o cigars.out
 ```
 
-Choosing the correct alignment and system options is key for performance. The tool tries to automatically choose adequate paramters, but the user
-may have additional information to make a better choise. It is specially important to limit the maximum error supported by the kernel as much as
-possible (`-e` parameter), this contrains the memory used per alignment, and helps the program to choose better block and grid sizes. Keep in mind that any alignment having an error higher than the specified with the `-e` argument will be computed on the CPU, so, if this argument is too small, performance can decrease.
+Choosing the correct alignment and system options is key for performance. The tool tries to automatically choose adequate parameters, but the user
+may have additional information to make a better choice. It is especially important to limit the maximum error supported by the kernel as much as
+possible (`-e` parameter), this constrains the memory used per alignment and helps the program to choose better block and grid sizes. Keep in mind that any alignment having an error higher than the specified with the `-e` argument will be computed on the CPU, so, if this argument is too small, performance can decrease.
 
 For big alignments, setting a band (i.e. limiting maximum wavefront size) with the `-B` argument can give significant
-speedups, at the expense of potentially loosing some accuracy in corner cases.
+speedups, at the expense of potentially losing some accuracy in corner cases.
 
 ## Using WFA-GPU in your project
 
-This is a simple example on how to use WFA-GPU on your projects, for extended examples, see the files in `examples/`.
+This is a simple example of how to use WFA-GPU on your projects, for extended examples, see the files in `examples/`.
 
 ``` c
 #include "include/wfa_gpu.h"
@@ -100,7 +100,7 @@ aligner.results[0].error
 aligner.results[0].cigar.buffer
 ```
 
-To compile, use the following options, where `$WFAGPU_PATH` is the path of this respository.
+To compile, use the following options, where `$WFAGPU_PATH` is the path of this repository.
 
 ```
 gcc test_wfagpu.c -o test-wfagpu -I $WFAGPU_PATH/lib/ -I $WFAGPU_PATH -L $WFAGPU_PATH/build/ -L $WFAGPU_PATH/external/WFA/lib/ -lwfagpu -lwfa -lm -fopenmp
@@ -112,21 +112,37 @@ Then, to execute the generated binary, the OS needs to be able to find the dynam
 
 #### cudaErrorLaunchTimeout
 
-When there is a screen connected, the maximum kernel time is 5 seconds. Disable the GUI or choose a smaller batch size to reduce kernel execution time.
-On Ubuntu based systems, the GUI can be disabled with the command `sudo systemctl isolate multi-user.target` (keep in mind that this will close all applications on your desktop environment such as browsers, text-editors... etc).
+When a screen is connected, the maximum kernel time is 5 seconds. Disable the GUI or choose a smaller batch size to reduce kernel execution time.
+On Ubuntu-based systems, the GUI can be disabled with the command `sudo systemctl isolate multi-user.target` (keep in mind that this will close all applications on your desktop environment such as browsers, text editors... etc).
 
 #### Out of memory
 
-The program is trying to use too much memory. Decrease batch size or maximum error supported by the kernel. The aligner tool stores all sequences to main memory
+The program is trying to use too much memory. Decrease batch size or maximum error supported by the kernel. The aligner tool stores all sequences in the main memory
 before starting the alignment on the GPU, if your machine does not have enough memory, it can also raise an out-of-memory error on the CPU side.
+
+## Guidelines for WFA-GPU Approximated Alignment
+
+There is a tradeoff between the (β,λ) parameters and the recall and execution time of the method. When using a large bandwidth (β), a λ=100 is sufficient and, when using a smaller β, setting λ around 50 is recommended. In any case, the accuracy drop is usually small (<3%). The following table shows an example of how time and recall are affected by (β,λ) changes. Unless optimal accuracy is paramount, default (β,λ) parameters will yield a good balance between execution time and minimal loss in recall.
+
+<table align="center">
+  <tr>
+    <td><p align="center">Time (in seconds)</p></td>
+    <td><p align="center">Recall (%)</p></td>
+  </tr>
+  <tr>
+    <td><img src="img/approximate-time.png" align="center" width="400px"></td>
+    <td><img src="img/approximate-recall.png" align="center" width="400px"></td>
+  </tr>
+</table>
+<p align=center><sub><sub>Time and recall achieved with different heuristic parameters for the Nanopore dataset.</sub></sub></p>
 
 ## Problems and suggestions
 
-Open an issue on Github or contact with the main developer: Quim Aguado-Puig (quim.aguado.p@gmail.com)
+Open an issue on GitHub or contact the main developer: Quim Aguado-Puig (quim.aguado.p@gmail.com)
 
 ## License
 
-WFA-GPU is distributed under the MIT licence.
+WFA-GPU is distributed under the MIT license.
 
 ## Citation
 
