@@ -146,4 +146,4 @@ WFA-GPU is distributed under the MIT license.
 
 ## Citation
 
-Quim Aguado-Puig, Max Doblas, Christos Matzoros, Antonio Espinosa, Juan Carlos Moure, Santiago Marco-Sola,  Miquel Moreto. WFA-GPU: Gap-affine pairwise alignment using GPUs. bioRxiv (2022). DOI [2022.04.18.488374](https://doi.org/10.1101/2022.04.18.488374)
+Quim Aguado-Puig, Max Doblas, Christos Matzoros, Antonio Espinosa, Juan Carlos Moure, Santiago Marco-Sola, Miquel Moreto. WFA-GPU: gap-affine pairwise read-alignment using GPUs. Bioinformatics (2023). DOI [bioinformatics/btad701](https://doi.org/10.1093/bioinformatics/btad701)
