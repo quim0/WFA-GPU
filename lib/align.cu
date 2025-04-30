@@ -91,7 +91,17 @@ void launch_alignments (char* sequences_buffer,
               (float(mem_needed_unpacked) / (1<<20)));
 
     cudaMalloc(&d_seq_buffer_unpacked, mem_needed_unpacked);
-    CUDA_CHECK_ERR
+    cudaError_t c_err = cudaGetLastError();
+    if (c_err != cudaSuccess) {
+        if (c_err == cudaErrorMemoryAllocation) {
+            LOG_ERROR("Not enough memory to allocate the sequences buffer on the "
+                      "device. Consider decreasing the batch size.");
+        } else {
+        fprintf(stderr, "Error %s: %s at %s:%d\n", cudaGetErrorName(c_err),
+               cudaGetErrorString(c_err), __FILE__, __LINE__);
+        }
+        exit(-1);
+    }
 
     char *d_seq_buffer_packed;
     size_t mem_needed_packed = 0;
@@ -122,14 +132,34 @@ void launch_alignments (char* sequences_buffer,
               (float(mem_needed_packed) / (1<<20)));
 
     cudaMalloc(&d_seq_buffer_packed, mem_needed_packed);
-    CUDA_CHECK_ERR
+    c_err = cudaGetLastError();
+    if (c_err != cudaSuccess) {
+        if (c_err == cudaErrorMemoryAllocation) {
+            LOG_ERROR("Not enough memory to allocate the sequences buffer on the "
+                      "device. Consider decreasing the batch size.");
+        } else {
+        fprintf(stderr, "Error %s: %s at %s:%d\n", cudaGetErrorName(c_err),
+               cudaGetErrorString(c_err), __FILE__, __LINE__);
+        }
+        exit(-1);
+    }
 
     sequence_pair_t *d_seq_metadata;
     size_t mem_needed_metadata = batch_size * sizeof(sequence_pair_t);
     LOG_DEBUG("Allocating %.2f MiB to store the packed sequences metadata on "
               "the device.", float(mem_needed_metadata) / (1<<20));
     cudaMalloc(&d_seq_metadata, mem_needed_metadata);
-    CUDA_CHECK_ERR
+    c_err = cudaGetLastError();
+    if (c_err != cudaSuccess) {
+        if (c_err == cudaErrorMemoryAllocation) {
+            LOG_ERROR("Not enough memory to allocate the sequences metadata buffer "
+                      "on the device. Consider decreasing the batch size.");
+        } else {
+        fprintf(stderr, "Error %s: %s at %s:%d\n", cudaGetErrorName(c_err),
+               cudaGetErrorString(c_err), __FILE__, __LINE__);
+        }
+        exit(-1);
+    }
 
     LOG_DEBUG("Aligning %zu alignments using %d batchs of %zu elements.",
               num_alignments, num_batchs, batch_size);
@@ -149,6 +179,17 @@ void launch_alignments (char* sequences_buffer,
     // Results of the alignments
     alignment_result_t *results_d;
     cudaMalloc(&results_d, batch_size * sizeof(alignment_result_t));
+    c_err = cudaGetLastError();
+    if (c_err != cudaSuccess) {
+        if (c_err == cudaErrorMemoryAllocation) {
+            LOG_ERROR("Not enough memory to allocate the results buffer on the "
+                      "device. Consider decreasing the batch size.");
+        } else {
+        fprintf(stderr, "Error %s: %s at %s:%d\n", cudaGetErrorName(c_err),
+               cudaGetErrorString(c_err), __FILE__, __LINE__);
+        }
+        exit(-1);
+    }
     CUDA_CHECK_ERR
 
     // Space for the kernel to store the offloaded backtraces on the GPU, this
@@ -528,7 +569,17 @@ void launch_alignments_distance (char* sequences_buffer,
               (float(mem_needed_unpacked) / (1<<20)));
 
     cudaMalloc(&d_seq_buffer_unpacked, mem_needed_unpacked);
-    CUDA_CHECK_ERR
+    cudaError_t c_err = cudaGetLastError();
+    if (c_err != cudaSuccess) {
+        if (c_err == cudaErrorMemoryAllocation) {
+            LOG_ERROR("Not enough memory to allocate the sequences buffer on the "
+                      "device. Consider decreasing the batch size.");
+        } else {
+        fprintf(stderr, "Error %s: %s at %s:%d\n", cudaGetErrorName(c_err),
+               cudaGetErrorString(c_err), __FILE__, __LINE__);
+        }
+        exit(-1);
+    }
 
     char *d_seq_buffer_packed;
     size_t mem_needed_packed = 0;
@@ -559,14 +610,34 @@ void launch_alignments_distance (char* sequences_buffer,
               (float(mem_needed_packed) / (1<<20)));
 
     cudaMalloc(&d_seq_buffer_packed, mem_needed_packed);
-    CUDA_CHECK_ERR
+    c_err = cudaGetLastError();
+    if (c_err != cudaSuccess) {
+        if (c_err == cudaErrorMemoryAllocation) {
+            LOG_ERROR("Not enough memory to allocate the sequences buffer on the "
+                      "device. Consider decreasing the batch size.");
+        } else {
+        fprintf(stderr, "Error %s: %s at %s:%d\n", cudaGetErrorName(c_err),
+               cudaGetErrorString(c_err), __FILE__, __LINE__);
+        }
+        exit(-1);
+    }
 
     sequence_pair_t *d_seq_metadata;
     size_t mem_needed_metadata = batch_size * sizeof(sequence_pair_t);
     LOG_DEBUG("Allocating %.2f MiB to store the packed sequences metadata on "
               "the device.", float(mem_needed_metadata) / (1<<20));
     cudaMalloc(&d_seq_metadata, mem_needed_metadata);
-    CUDA_CHECK_ERR
+    c_err = cudaGetLastError();
+    if (c_err != cudaSuccess) {
+        if (c_err == cudaErrorMemoryAllocation) {
+            LOG_ERROR("Not enough memory to allocate the sequence metadata buffer "
+                      "on the device. Consider decreasing the batch size.");
+        } else {
+        fprintf(stderr, "Error %s: %s at %s:%d\n", cudaGetErrorName(c_err),
+               cudaGetErrorString(c_err), __FILE__, __LINE__);
+        }
+        exit(-1);
+    }
 
     LOG_DEBUG("Aligning %zu alignments using %d batchs of %zu elements.",
               num_alignments, num_batchs, batch_size);
@@ -586,7 +657,17 @@ void launch_alignments_distance (char* sequences_buffer,
     // Results of the alignments
     alignment_result_t *results_d;
     cudaMalloc(&results_d, batch_size * sizeof(alignment_result_t));
-    CUDA_CHECK_ERR
+    c_err = cudaGetLastError();
+    if (c_err != cudaSuccess) {
+        if (c_err == cudaErrorMemoryAllocation) {
+            LOG_ERROR("Not enough memory to allocate the results buffer on the "
+                      "device. Consider decreasing the batch size.");
+        } else {
+        fprintf(stderr, "Error %s: %s at %s:%d\n", cudaGetErrorName(c_err),
+               cudaGetErrorString(c_err), __FILE__, __LINE__);
+        }
+        exit(-1);
+    }
 
     uint8_t* wf_data_buffer = NULL;
     if (band <= 0) {
