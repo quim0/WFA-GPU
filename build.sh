@@ -62,5 +62,13 @@ if [[ $output == *"compute"* ]]; then
     fi
 fi
 
+# Check if external/WFA2-lib path is empty (even if it exist), if not, print a message about submodule and exit
+if [ -d "external/WFA2-lib" ]; then
+    if [ -z "$(ls -A external/WFA2-lib)" ]; then
+        echo "ERROR: The external/WFA2-lib directory is empty. Please run 'git submodule update --init --recursive' to clone the WFA2-lib submodule."
+        exit 1
+    fi
+fi
+
 # Build
 make CC=$GCC NVCC=$NVCC SM=$MAJOR_CAP$MINOR_CAP clean aligner

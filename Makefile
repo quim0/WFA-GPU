@@ -9,20 +9,20 @@ SRC_LIB=$(SRC_PATH)/kernels/sequence_alignment_kernel.cu $(SRC_PATH)/kernels/seq
 SRC_WFA_CPU=utils/wfa_cpu.c
 ARGS=-I . -Ilib/
 ARGS_ALIGNER=-Wall -Wno-unused-function -Lbuild/ -L/usr/local/cuda/lib64 $(ARGS)
-ARGS_WFA_CPU=-Lexternal/WFA/lib/ $(ARGS) -Iexternal/WFA/ -lwfa
+ARGS_WFA_CPU=-Lexternal/WFA2-lib/lib/ $(ARGS) -Iexternal/WFA2-lib/ -lwfa
 NVCC_OPTIONS=-O3 -maxrregcount=64 -gencode arch=compute_$(COMPUTE),code=sm_$(SM) -Xptxas -v# -Xcompiler -fopenmp
 
 aligner: wfa-cpu wfa-gpu-so $(SRC_ALIGNER)
 	mkdir -p bin
-	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -Lexternal/WFA/lib/ -O3 -o bin/wfa.affine.gpu -lwfagpu -lwfa -lm -Wl,-rpath=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))/build/ -fopenmp
+	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -Lexternal/WFA2-lib/lib/ -O3 -o bin/wfa.affine.gpu -lwfagpu -lwfa -lm -Wl,-rpath=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))/build/ -fopenmp
 
 aligner-debug: wfa-cpu wfa-gpu-debug-so $(SRC_ALIGNER)
 	mkdir -p bin
-	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -ggdb -DDEBUG -Lexternal/WFA/lib/ -o bin/wfa.affine.gpu -lwfagpu -lwfa -lm -fopenmp
+	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -ggdb -DDEBUG -Lexternal/WFA2-lib/lib/ -o bin/wfa.affine.gpu -lwfagpu -lwfa -lm -fopenmp
 
 aligner-profile: wfa-cpu wfa-gpu-profile-so $(SRC_ALIGNER)
 	mkdir -p bin
-	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -Lexternal/WFA/lib/ -o bin/wfa.affine.gpu -lwfagpu -lwfa -lm -fopenmp
+	$(CC) $(SRC_ALIGNER) $(ARGS_ALIGNER) -Lexternal/WFA2-lib/lib/ -o bin/wfa.affine.gpu -lwfagpu -lwfa -lm -fopenmp
 
 run-tests:
 	for f in bin/test-*; do ./$$f; done
@@ -45,10 +45,10 @@ wfa-gpu-profile-so: $(SRC_LIB)
 	mv *.o build/
 	$(NVCC) $(NVCC_OPTIONS) -lineinfo -shared -o build/libwfagpu.so build/*.o -lcudart
 
-external/WFA:
+external/WFA2-lib:
 	$(MAKE) -C $@
 
-wfa-cpu: $(SRC_WFA_CPU) external/WFA
+wfa-cpu: $(SRC_WFA_CPU) external/WFA2-lib
 	mkdir -p build
 	$(CC) $(ARGS) $(ARGS_WFA_CPU) -O3 -fopenmp -Wall -fPIC -c $(SRC_WFA_CPU)
 	mv *.o build/
@@ -64,4 +64,4 @@ wfa-gpu: $(SRC_LIB) wfa-cpu
 clean:
 	rm -rf build/ bin/
 
-.PHONY: external/WFA
+.PHONY: external/WFA2-lib

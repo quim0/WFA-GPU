@@ -23,8 +23,8 @@
 #include "utils/wfa_cpu.h"
 #include "utils/logger.h"
 #include "utils/cigar.h"
-#include "external/WFA/wavefront/wavefront_align.h"
-#include "external/WFA/alignment/cigar.h"
+#include "external/WFA2-lib/wavefront/wavefront_align.h"
+#include "external/WFA2-lib/alignment/cigar.h"
 
 // Compute multiple alignments reusing the aligner object
 int compute_alignments_cpu_threaded (const int batch_size,
@@ -206,9 +206,7 @@ void pprint_cigar_cpu (const char* const pattern, const char* const text,
 
     wavefront_align(wf_aligner, pattern, plen, text, tlen);
 
-    cigar_print_pretty(stdout,
-      pattern,strlen(pattern),text,strlen(text),
-      wf_aligner->cigar,wf_aligner->mm_allocator);
+    cigar_print_pretty(stdout,wf_aligner->cigar,pattern,strlen(pattern),text,strlen(text));
 
     wavefront_aligner_delete(wf_aligner);
 }

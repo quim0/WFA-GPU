@@ -11,6 +11,7 @@ To compile the library and tools, run the following commands:
 ```
 git clone git@github.com:quim0/WFA-GPU.git && \
 cd WFA-GPU && \
+git submodule update --init --recursive && \
 ./build.sh
 ```
 
@@ -103,7 +104,7 @@ aligner.results[0].cigar.buffer
 To compile, use the following options, where `$WFAGPU_PATH` is the path of this repository.
 
 ```
-gcc test_wfagpu.c -o test-wfagpu -I $WFAGPU_PATH/lib/ -I $WFAGPU_PATH -L $WFAGPU_PATH/build/ -L $WFAGPU_PATH/external/WFA/lib/ -lwfagpu -lwfa -lm -fopenmp
+gcc test_wfagpu.c -o test-wfagpu -I $WFAGPU_PATH/lib/ -I $WFAGPU_PATH -L $WFAGPU_PATH/build/ -L $WFAGPU_PATH/external/WFA2-lib/lib/ -lwfagpu -lwfa -lm -fopenmp
 ```
 
 Then, to execute the generated binary, the OS needs to be able to find the dynamic library `$WFAGPU_PATH/build/libwfagpu.so`. A fast and easy way of doing so is adding it into the `LD_LIBRAY_PATH` environment variable (`export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$WFAGPU_PATH/build/`).
