@@ -36,6 +36,7 @@ void test_sequences_invalid_aligner_pointer () {
 
     affine_penalties_t penalties;
     ok = wfagpu_initialize_parameters(NULL, penalties);
+    TEST_ASSERT(!ok);
 }
 
 void test_sequences_invalid_penalties () {
@@ -80,6 +81,8 @@ void test_sequences_10k_single_batch_x2_o3_e1 () {
             }
         }
     }
+
+    wfagpu_destroy_aligner(&aligner);
 }
 
 void test_sequences_10k_multi_batch_x2_o3_e1 () {
@@ -107,6 +110,37 @@ void test_sequences_10k_multi_batch_x2_o3_e1 () {
             }
         }
     }
+
+    wfagpu_destroy_aligner(&aligner);
+}
+
+void test_sequences_10k_multi_batch_x2_o3_e1_large_numberof_sequences () {
+    // 10K 10% error
+    wfagpu_aligner_t aligner = {0};
+    wfagpu_initialize_aligner(&aligner);
+    for (int j=0; j<200; j++) {
+        for (int i=0; i<200; i+=2) {
+            wfagpu_add_sequences(&aligner, sequences_10K_n100[i], sequences_10K_n100[i+1]);
+        }
+    }
+
+    affine_penalties_t penalties = {.x = 2, .o = 3, .e = 1};
+    wfagpu_initialize_parameters(&aligner, penalties);
+    aligner.alignment_options.compute_cigar = true;
+    wfagpu_set_batch_size(&aligner, 100);
+
+    wfagpu_align(&aligner);
+
+    for (int j=0; j<200; j++) {
+        for (int i=0; i<100; i++) {
+            const int error = aligner.results[j*100 + i].error;
+            if (error != -results_10K_n100_x2o3e1[i]) {
+                TEST_FAIL("Incorrect result (length=10K, error=10\%, (x,o,e)=(2,3,1)");
+            }
+        }
+    }
+
+    wfagpu_destroy_aligner(&aligner);
 }
 
 void test_sequences_10k_multi_batch_x3_o5_e2 () {
@@ -134,6 +168,8 @@ void test_sequences_10k_multi_batch_x3_o5_e2 () {
             }
         }
     }
+
+    wfagpu_destroy_aligner(&aligner);
 }
 
 void test_sequences_10k_multi_batch_x3_o5_e2_distance_only () {
@@ -162,6 +198,8 @@ void test_sequences_10k_multi_batch_x3_o5_e2_distance_only () {
             }
         }
     }
+
+    wfagpu_destroy_aligner(&aligner);
 }
 
 void test_sequences_1000_multi_batch_x2_o3_e1 () {
@@ -189,6 +227,8 @@ void test_sequences_1000_multi_batch_x2_o3_e1 () {
             }
         }
     }
+
+    wfagpu_destroy_aligner(&aligner);
 }
 
 void test_sequences_1000_multi_batch_x5_o3_e2 () {
@@ -216,6 +256,8 @@ void test_sequences_1000_multi_batch_x5_o3_e2 () {
             }
         }
     }
+
+    wfagpu_destroy_aligner(&aligner);
 }
 
 int main () {
@@ -223,6 +265,7 @@ int main () {
     test_sequences_invalid_penalties();
     test_sequences_10k_single_batch_x2_o3_e1();
     test_sequences_10k_multi_batch_x2_o3_e1();
+    test_sequences_10k_multi_batch_x2_o3_e1_large_numberof_sequences();
     test_sequences_10k_multi_batch_x3_o5_e2();
     test_sequences_10k_multi_batch_x3_o5_e2_distance_only();
     test_sequences_1000_multi_batch_x2_o3_e1();

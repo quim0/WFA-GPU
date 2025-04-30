@@ -1,4 +1,4 @@
-SM=80
+SM=89
 COMPUTE=$(SM)
 CC=gcc
 NVCC=nvcc

@@ -100,8 +100,8 @@ static bool grow_sequences_metadata (wfagpu_aligner_t* aligner) {
         return false;
     }
 
-    size_t new_size = (aligner->sequences_metadata_len + DEFAULT_SEQ_METADATA_SIZE) * sizeof(sequence_pair_t);
-    sequence_pair_t* new_buf = (sequence_pair_t*)realloc(aligner->sequences_metadata, new_size);
+    size_t new_size = (aligner->sequences_metadata_len + DEFAULT_SEQ_METADATA_SIZE);
+    sequence_pair_t* new_buf = (sequence_pair_t*)realloc(aligner->sequences_metadata, new_size * sizeof(sequence_pair_t));
     if (new_buf == NULL) {
         LOG_ERROR("Can now grow sequences metadata buffer (realloc failed).");
         return false;
